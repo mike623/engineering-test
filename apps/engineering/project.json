@@ -45,31 +45,35 @@
       }
     },
     "typeorm-generate-migrations": {
-      "executor": "@nrwl/workspace:run-commands",
+      "executor": "nx:run-commands",
       "outputs": ["{options.outputPath}"],
       "options": {
         "cwd": "apps/engineering",
-        "commands": ["typeorm -d ../../dist/apps/typeorm-migration/main.js migration:generate"]
+        "commands": [
+          "typeorm -d ../../dist/apps/typeorm-migration/main.js migration:generate"
+        ]
       },
       "dependsOn": ["build-migration-config"]
     },
     "typeorm-run-migrations": {
-      "executor": "@nrwl/workspace:run-commands",
+      "executor": "nx:run-commands",
       "outputs": ["{options.outputPath}"],
       "options": {
         "cwd": "apps/engineering",
-        "commands": ["typeorm -d ../../dist/apps/typeorm-migration/main.js migration:run"]
+        "commands": [
+          "typeorm -d ../../dist/apps/typeorm-migration/main.js migration:run"
+        ]
       },
       "dependsOn": ["build-migration-config"]
     },
     "seedrun": {
-      "executor": "@nrwl/workspace:run-commands",
+      "executor": "nx:run-commands",
       "outputs": ["{options.outputPath}"],
       "options": {
         "cwd": "apps/engineering",
-        "commands": ["ts-node --project ./tsconfig.seed.json ../../node_modules/typeorm-seeding/dist/cli.js seed -n ./ormconfig.json"]
-      },
-      "dependsOn": ["build"]
+        "envFile": ".env",
+        "commands": ["TS_NODE_PROJECT=./tsconfig.seed.json node --require ts-node/register ./src/database/seeds/run.seeds.ts"]
+      }
     },
     "lint": {
       "executor": "@nrwl/linter:eslint",

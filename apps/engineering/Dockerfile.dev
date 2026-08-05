@@ -1,11 +1,12 @@
-FROM node:lts-gallium
-
-RUN apt-get update -y && npm install -g nx && npm install -g @nrwl/cli
-
-COPY --chown=node:node . /usr/src/app
+FROM node:20-bookworm-slim
 
 WORKDIR /usr/src/app
-RUN rm -rf node_modules
-RUN npm install --force --loglevel verbose
 
-CMD ["sh", "-c", "npm run start:api"]
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+EXPOSE 8080
+
+CMD ["npm", "run", "start:api"]

@@ -15,15 +15,15 @@ Please follow the installation instructions carefully and don't spend any more t
 - git installed | https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
 - WSL2 for windows | https://learn.microsoft.com/en-us/windows/wsl/install
 - A database GUI
-- NPM | https://docs.npmjs.com/cli/v6/commands/npm-install
+- NPM | https://docs.npmjs.com/
 - Postman | https://www.postman.com/
 
 ### Steps
 
 1. Git clone the repository `git clone https://github.com/Eurocamp/engineering-test.git`
 2. `cd` into the engineering-test directory
-3. run `docker-compose up -d --force-recreate`  (some versions of docker will use `docker compose` rather than `docker-compose`)
-4. run `docker exec -it engineering-test_eurocamp-api_1 npm run seed:run` (sometimes the name is different, check with `docker ps`)
+3. run `docker compose up -d --build --force-recreate`
+4. run `docker compose exec eurocamp-api npm run seed:run`
 5. Check that there is data in the database tables (see below for connection details). Also review the api documentation at http://localhost:3001/api
 6. Load the postman collection from the root directory 'Engineering.postman_collection.json' and test the api endpoints
 

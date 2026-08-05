@@ -1,9 +1,9 @@
-import { Connection } from "typeorm";
-import { Factory, Seeder } from "typeorm-seeding";
+import { DataSource } from "typeorm";
 import { ParcModel } from "../../entities/parc/parc.model";
+import { buildParc } from "../factories/parc.factory";
 
-export class ParcFakeSeed implements Seeder {
-  async run(factory: Factory, connection: Connection): Promise<any> {
-    await factory(ParcModel)().createMany(20)
-  }
-}
+export const seedParcs = async (dataSource: DataSource, count = 20): Promise<ParcModel[]> => {
+  const parcs = Array.from({ length: count }, (_, index) => buildParc(index));
+
+  return dataSource.getRepository(ParcModel).save(parcs);
+};

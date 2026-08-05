@@ -1,14 +1,14 @@
-import { define } from "typeorm-seeding";
+import { v4 as uuidv4 } from "uuid";
 import { BookingModel } from "../../entities/booking/booking.model";
 
-define(BookingModel, (faker) => {
-  const booking = new BookingModel;
+export const buildBooking = (userId: string, parcId: string): BookingModel => {
+  const booking = new BookingModel();
 
-  booking.id = faker.random.uuid();
-  booking.user = faker.random.uuid();
-  booking.parc = faker.random.uuid();
-  booking.bookingdate = faker.date.past().toISOString();
-  booking.comments = faker.lorem.sentence();
+  booking.id = uuidv4();
+  booking.user = userId;
+  booking.parc = parcId;
+  booking.bookingdate = new Date().toISOString();
+  booking.comments = "Seeded booking";
 
-  return booking
-})
+  return booking;
+};

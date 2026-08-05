@@ -1,4 +1,3 @@
-version: '3'
 services:
   eurocamp-db:
     image: postgres:14-alpine
@@ -11,6 +10,11 @@ services:
       - 5433:5432
     volumes:
       - ./eurocamp-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d eurocamp_api"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   # eurocamp-redis:
   #   image: redis:6.2.5-alpine
@@ -23,17 +27,15 @@ services:
   eurocamp-api:
     build:
       context: .
-      dockerfile: './apps/engineering/Dockerfile.dev'
-    links:
-      - eurocamp-db
+      dockerfile: ./apps/engineering/Dockerfile.dev
     environment:
       - DB_HOST=eurocamp-db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=eurocamp_api
-
     ports:
       - 3001:8080
     depends_on:
-      - eurocamp-db
+      eurocamp-db:
+        condition: service_healthy

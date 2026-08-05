@@ -1,9 +1,19 @@
-import { Connection } from "typeorm";
-import { Factory, Seeder } from "typeorm-seeding";
+import { DataSource } from "typeorm";
 import { BookingModel } from "../../entities/booking/booking.model";
+import { buildBooking } from "../factories/booking.factory";
 
-export class BookingFakeSeed implements Seeder {
-  async run(factory: Factory, connection: Connection): Promise<any> {
-    await factory(BookingModel)().createMany(10)
-  }
-}
+export const seedBookings = async (
+  dataSource: DataSource,
+  userIds: string[],
+  parcIds: string[],
+  count = 10,
+): Promise<BookingModel[]> => {
+  const bookings = Array.from({ length: count }, (_, index) => {
+    const userId = userIds[index % userIds.length];
+    const parcId = parcIds[index % parcIds.length];
+
+    return buildBooking(userId, parcId);
+  });
+
+  return dataSource.getRepository(BookingModel).save(bookings);
+};

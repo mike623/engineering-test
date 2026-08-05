@@ -4,8 +4,8 @@
   "license": "MIT",
   "scripts": {
     "lint": "nx run-many --target=lint --all",
-    "start:all": "docker-compose up",
-    "start:deps": "docker-compose up eurocamp-db eurocamp-api",
+    "start:all": "docker compose up",
+    "start:deps": "docker compose up eurocamp-db eurocamp-api",
     "start:api": "nx run engineering:serve",
     "seed:run": "nx run engineering:seedrun",
     "test:api": "nx run engineering:test",
@@ -15,6 +15,10 @@
     "typeorm-run-migrations": "npm run typeorm-build-config && typeorm -d dist/typeorm.config.js migration:run"
   },
   "private": true,
+  "engines": {
+    "node": ">=18",
+    "npm": ">=9"
+  },
   "dependencies": {
     "@nestjs/common": "^9.0.0",
     "@nestjs/config": "^2.3.1",
@@ -32,7 +36,6 @@
     "rxjs": "^7.8.0",
     "swagger-ui-express": "^4.6.1",
     "typeorm": "0.3.12",
-    "typeorm-seeding": "^1.6.1",
     "uuid": "^9.0.0",
     "uuidv4": "^6.2.13"
   },
@@ -44,7 +47,6 @@
     "@nrwl/linter": "15.7.2",
     "@nrwl/nest": "15.7.2",
     "@nrwl/node": "15.7.2",
-    "@nrwl/nx-cloud": "latest",
     "@nrwl/webpack": "15.7.2",
     "@nrwl/workspace": "15.7.2",
     "@types/faker": "^6.6.9",

@@ -1,9 +1,9 @@
-import { Connection } from "typeorm";
-import { Factory, Seeder } from "typeorm-seeding";
+import { DataSource } from "typeorm";
 import { UserModel } from "../../entities/user/user.model";
+import { buildUser } from "../factories/user.factory";
 
-export class UserFakeSeed implements Seeder {
-  async run(factory: Factory, connection: Connection): Promise<any> {
-    await factory(UserModel)().createMany(30)
-  }
-}
+export const seedUsers = async (dataSource: DataSource, count = 30): Promise<UserModel[]> => {
+  const users = Array.from({ length: count }, (_, index) => buildUser(index));
+
+  return dataSource.getRepository(UserModel).save(users);
+};

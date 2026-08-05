@@ -1,12 +1,12 @@
-import { define } from "typeorm-seeding";
+import { v4 as uuidv4 } from "uuid";
 import { UserModel } from "../../entities/user/user.model";
 
-define(UserModel, (faker) => {
-  const user = new UserModel;
+export const buildUser = (index: number): UserModel => {
+  const user = new UserModel();
 
-  user.id = faker.random.uuid();
-  user.name = faker.name.findName();
-  user.email = faker.internet.email();
+  user.id = uuidv4();
+  user.name = `User ${index + 1}`;
+  user.email = `user${index + 1}@example.com`;
 
-  return user
-})
+  return user;
+};

@@ -1,11 +1,12 @@
-import { define } from "typeorm-seeding";
+import { v4 as uuidv4 } from "uuid";
 import { ParcModel } from "../../entities/parc/parc.model";
 
-define(ParcModel, (faker) => {
-  const parc = new ParcModel;
-  parc.id = faker.random.number();
-  parc.name = faker.lorem.word();
-  parc.description = faker.lorem.sentence();
+export const buildParc = (index: number): ParcModel => {
+  const parc = new ParcModel();
 
-  return parc
-})
+  parc.id = uuidv4();
+  parc.name = `Parc ${index + 1}`;
+  parc.description = `Demo description for parc ${index + 1}`;
+
+  return parc;
+};
