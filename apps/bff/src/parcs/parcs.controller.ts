@@ -9,10 +9,13 @@ export class ParcsController {
 
   @Get()
   async findAll(@Res({ passthrough: true }) response: Response): Promise<Parc[]> {
-    // Nothing is cached yet, so every response is served straight from
-    // upstream. The header is the seam the cache layer later writes through.
+    const result = await this.parcs.findAll();
+
+    // Set only once the call has succeeded: a failed response has no cache
+    // state to report, and claiming one would be a lie. Nothing is cached yet,
+    // so every success is served straight from upstream.
     response.setHeader('X-Cache', 'miss');
 
-    return this.parcs.findAll();
+    return result;
   }
 }

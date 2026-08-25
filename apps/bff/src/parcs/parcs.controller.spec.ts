@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AxiosInstance } from 'axios';
 import request from 'supertest';
-import { UPSTREAM } from '../upstream/upstream.module';
+import { UPSTREAM_HTTP } from '../upstream/upstream.tokens';
 import { ParcsModule } from './parcs.module';
 
 describe('GET /parcs', () => {
@@ -13,7 +13,7 @@ describe('GET /parcs', () => {
     get.mockReset();
 
     const moduleRef = await Test.createTestingModule({ imports: [ParcsModule] })
-      .overrideProvider(UPSTREAM)
+      .overrideProvider(UPSTREAM_HTTP)
       .useValue({ get } as unknown as AxiosInstance)
       .compile();
 

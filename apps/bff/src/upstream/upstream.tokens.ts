@@ -1,0 +1,2 @@
+export const UPSTREAM_HTTP = 'UPSTREAM_HTTP';
+export const UPSTREAM_CONFIG = 'UPSTREAM_CONFIG';

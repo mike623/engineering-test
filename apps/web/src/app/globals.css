@@ -34,3 +34,14 @@ p {
   margin: 0;
   opacity: 0.75;
 }
+
+nav {
+  max-width: 48rem;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  gap: 1rem;
+}
+
+nav a {
+  color: inherit;
+}

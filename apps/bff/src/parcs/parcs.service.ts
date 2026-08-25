@@ -1,19 +1,20 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { AxiosInstance } from 'axios';
-import { UPSTREAM } from '../upstream/upstream.module';
+import { Injectable } from '@nestjs/common';
+import { UpstreamClient } from '../upstream/upstream.client';
 import { Parc } from './parc';
+
+const ROUTE = 'GET /parcs';
 
 @Injectable()
 export class ParcsService {
-  constructor(@Inject(UPSTREAM) private readonly http: AxiosInstance) {}
+  constructor(private readonly upstream: UpstreamClient) {}
 
   /**
    * Upstream wraps its collections in a `data` envelope. We unwrap here so the
    * envelope stops at this boundary and never reaches the web application.
    */
   async findAll(): Promise<Parc[]> {
-    const response = await this.http.get<{ data: Parc[] }>('/parcs');
+    const body = await this.upstream.get<{ data: Parc[] }>(ROUTE, '/parcs');
 
-    return response.data.data;
+    return body.data;
   }
 }

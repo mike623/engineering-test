@@ -547,12 +547,17 @@ reasoning is clearest while the code they describe is being written.
 
 ## Testing approach
 
-`msw` at the HTTP boundary for both applications, so the same handlers serve BFF
-tests and React Testing Library tests. Retry timing is controlled by an
-injectable `sleep` that is no-op'd under test, rather than by fake timers —
-fake timers interact badly with promise scheduling and produce intermittent
-failures, which is a poor look in a submission about handling intermittent
-failures.
+Tests intercept HTTP rather than mocking modules, so what is asserted is what
+actually left the process. `nock` does that in the BFF and `msw` does it in the
+web application. The intention was one library for both halves; `msw`'s CommonJS
+build pulls an ESM-only transitive dependency that Jest cannot `require`, and
+converting the BFF suite to ESM to accommodate a test double was a poor trade.
+
+Retry and breaker timing is controlled by configuration — the whole resilience
+policy is a plain `UpstreamConfig` object, so a test constructs a client with a
+1ms backoff and a volume threshold of 3. No fake timers: they interact badly
+with promise scheduling and produce intermittent failures, which is a poor look
+in a submission about handling intermittent failures.
 
 Backend cases: N attempts then success; exhausted retries surfacing an error;
 the breaker opening and stopping outbound requests; a half-open probe closing

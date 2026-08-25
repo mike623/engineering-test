@@ -4,6 +4,12 @@ export interface Parc {
   description: string;
 }
 
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
 const BFF_URL = process.env.BFF_URL ?? 'http://localhost:3002';
 
 /**
@@ -15,6 +21,16 @@ export async function getParcs(): Promise<Parc[]> {
 
   if (!response.ok) {
     throw new Error(`The BFF responded ${response.status} for /parcs`);
+  }
+
+  return response.json();
+}
+
+export async function getUsers(): Promise<User[]> {
+  const response = await fetch(`${BFF_URL}/users`, { cache: 'no-store' });
+
+  if (!response.ok) {
+    throw new Error(`The BFF responded ${response.status} for /users`);
   }
 
   return response.json();
