@@ -44,6 +44,7 @@ describe('GET /users', () => {
 
     expect(response.body).toEqual([ADA]);
     expect(response.headers['x-cache']).toBe('miss');
+    expect(response.headers['age']).toBe('0');
     expect(response.headers['x-dropped-records']).toBeUndefined();
   });
 
@@ -73,6 +74,18 @@ describe('GET /users', () => {
     get.mockResolvedValue({ data: { id: ADA.id } });
 
     await request(app.getHttpServer()).get('/users').expect(502);
+  });
+
+  it('serves the last good payload when upstream goes down, and says how old it is', async () => {
+    get.mockResolvedValueOnce({ data: [ADA] });
+    await request(app.getHttpServer()).get('/users').expect(200);
+
+    get.mockRejectedValue(new UpstreamFailureError('GET /users', new Error('socket hang up')));
+    const response = await request(app.getHttpServer()).get('/users').expect(200);
+
+    expect(response.body).toEqual([ADA]);
+    expect(response.headers['x-cache']).toBe('stale');
+    expect(response.headers['age']).toBeDefined();
   });
 
   it('answers 502 when upstream was called and kept failing', async () => {

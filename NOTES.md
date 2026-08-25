@@ -383,9 +383,11 @@ loses it, and a restart during an outage is precisely when it is needed. Redis
 also shares the safety net across instances, so a cold instance starts warm.
 
 ```ts
-CacheModule.register({
-  stores: [new Keyv({ store: new KeyvRedis(process.env.REDIS_URL) })],
-  ttl: 86_400_000,
+CacheModule.registerAsync({
+  useFactory: () => ({
+    stores: [new Keyv({ store: new KeyvRedis(client), namespace: 'bff' })],
+    ttl: 86_400_000,
+  }),
 })
 ```
 
@@ -402,6 +404,15 @@ miss and `set` that throws is logged and ignored, otherwise a cache outage
 becomes an API outage and the cache causes the failures it exists to absorb.
 This does introduce a shared fate: Redis down and upstream down together means
 a 502 with no fallback.
+
+Throwing is the easy case. The one that actually bites is a cache that neither
+answers nor fails: an unreachable Redis queues commands while it reconnects, so
+`set` never settles and the request hangs on the optional part of the work. Two
+guards, because they cover different failures. The client is created with
+`disableOfflineQueue`, so a command issued while disconnected is rejected rather
+than queued; and every cache operation runs under a 250ms deadline, which also
+covers a Redis that is connected but slow. A cache allowed to be missing must
+never be allowed to be slow.
 
 Composed responses are not cached. The enriched bookings payload is assembled
 per request from separately cached `bookings`, `users:<id>` and `parcs`

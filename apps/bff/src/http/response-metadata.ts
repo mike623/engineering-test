@@ -16,6 +16,11 @@ export const reportCacheState = (response: Response, state: CacheState): void =>
   response.setHeader('X-Cache', state);
 };
 
+/** `Age` is seconds, per RFC 9111 — the true age of what is being shown. */
+export const reportAge = (response: Response, ageMs: number): void => {
+  response.setHeader('Age', Math.round(ageMs / 1000));
+};
+
 export const reportDropped = (response: Response, dropped: number): void => {
   if (dropped > 0) {
     response.setHeader('X-Dropped-Records', dropped);

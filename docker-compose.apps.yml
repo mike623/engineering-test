@@ -1,0 +1,15 @@
+# The two applications written for this exercise. The supplied compose file is
+# left as delivered; this one adds only what the BFF needs.
+services:
+  bff-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - 6379:6379
+    # No volume on purpose. The cache is a safety net holding the last known
+    # good upstream payload — losing it costs a fallback, never data.
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10

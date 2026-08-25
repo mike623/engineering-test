@@ -14,6 +14,10 @@ export interface Collection<T> {
   items: T[];
   /** Records the BFF withheld because upstream sent them malformed. */
   dropped: number;
+  /** True when the live service could not be reached and this is the fallback. */
+  stale: boolean;
+  /** Age of the payload in seconds. Zero unless it came from the fallback. */
+  ageSeconds: number;
 }
 
 const BFF_URL = process.env.BFF_URL ?? 'http://localhost:3002';
@@ -33,6 +37,8 @@ async function getCollection<T>(path: string): Promise<Collection<T>> {
   return {
     items: (await response.json()) as T[],
     dropped: Number(response.headers.get('X-Dropped-Records') ?? 0),
+    stale: response.headers.get('X-Cache') === 'stale',
+    ageSeconds: Number(response.headers.get('Age') ?? 0),
   };
 }
 

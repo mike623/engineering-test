@@ -1,8 +1,8 @@
 import { Controller, Get, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
+import { reportAge, reportCacheState, reportDropped } from '../http/response-metadata';
 import { Parc } from './parc';
 import { ParcsService } from './parcs.service';
-import { reportCacheState, reportDropped } from '../http/response-metadata';
 
 @Controller('parcs')
 export class ParcsController {
@@ -10,12 +10,15 @@ export class ParcsController {
 
   @Get()
   async findAll(@Res({ passthrough: true }) response: Response): Promise<Parc[]> {
-    const { items, dropped } = await this.parcs.findAll();
+    const { value, state, ageMs } = await this.parcs.findAll();
 
-    reportCacheState(response, 'miss');
-    reportDropped(response, dropped);
+    // Set only once the call has resolved: a failed response has no cache
+    // state to report, and claiming one would be a lie.
+    reportCacheState(response, state);
+    reportAge(response, ageMs);
+    reportDropped(response, value.dropped);
 
-    return items;
+    return value.items;
   }
 
   @Get(':id')
@@ -23,10 +26,11 @@ export class ParcsController {
     @Param('id') id: string,
     @Res({ passthrough: true }) response: Response,
   ): Promise<Parc> {
-    const parc = await this.parcs.findOne(id);
+    const { value, state, ageMs } = await this.parcs.findOne(id);
 
-    reportCacheState(response, 'miss');
+    reportCacheState(response, state);
+    reportAge(response, ageMs);
 
-    return parc;
+    return value;
   }
 }
