@@ -10,6 +10,20 @@ export interface User {
   email: string;
 }
 
+export interface Named {
+  id: string;
+  name: string;
+}
+
+export interface Booking {
+  id: string;
+  bookingDate: string;
+  comments?: string;
+  /** Null when the reference could not be resolved — a deleted user, say. */
+  user: Named | null;
+  parc: Named | null;
+}
+
 export interface Collection<T> {
   items: T[];
   /** Records the BFF withheld because upstream sent them malformed. */
@@ -45,3 +59,5 @@ async function getCollection<T>(path: string): Promise<Collection<T>> {
 export const getParcs = (): Promise<Collection<Parc>> => getCollection<Parc>('/parcs');
 
 export const getUsers = (): Promise<Collection<User>> => getCollection<User>('/users');
+
+export const getBookings = (): Promise<Collection<Booking>> => getCollection<Booking>('/bookings');

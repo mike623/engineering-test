@@ -8,5 +8,6 @@ import { ParcsService } from './parcs.service';
   imports: [UpstreamModule, CacheModule],
   controllers: [ParcsController],
   providers: [ParcsService],
+  exports: [ParcsService],
 })
 export class ParcsModule {}

@@ -4,6 +4,17 @@ import type { Cache } from 'cache-manager';
 import { UpstreamClientError, UpstreamContractError } from '../upstream/upstream.errors';
 import { CacheState } from '../http/response-metadata';
 
+export interface ReadOptions {
+  /**
+   * How recent an entry has to be for us to skip upstream entirely. Zero — the
+   * default — means always attempt upstream, which is what a primary read
+   * does. Enrichment lookups set a short window because reference data
+   * tolerates being a few seconds behind, and a booking list would otherwise
+   * mean one upstream call per distinct user on every page load.
+   */
+  freshnessMs?: number;
+}
+
 export interface Served<T> {
   value: T;
   state: CacheState;
@@ -53,7 +64,20 @@ export class SafetyNet {
 
   constructor(@Inject(CACHE_MANAGER) private readonly cache: Cache) {}
 
-  async read<T>(key: string, fetchFresh: () => Promise<T>): Promise<Served<T>> {
+  async read<T>(
+    key: string,
+    fetchFresh: () => Promise<T>,
+    { freshnessMs = 0 }: ReadOptions = {},
+  ): Promise<Served<T>> {
+    if (freshnessMs > 0) {
+      const entry = await this.recall<T>(key);
+      const ageMs = entry ? Date.now() - entry.cachedAt : Infinity;
+
+      if (entry && ageMs < freshnessMs) {
+        return { value: entry.value, state: 'hit', ageMs };
+      }
+    }
+
     try {
       const value = await fetchFresh();
 
