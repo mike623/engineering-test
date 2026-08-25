@@ -1,0 +1,11 @@
+import { Module } from '@nestjs/common';
+import { UpstreamModule } from '../upstream/upstream.module';
+import { ParcsController } from './parcs.controller';
+import { ParcsService } from './parcs.service';
+
+@Module({
+  imports: [UpstreamModule],
+  controllers: [ParcsController],
+  providers: [ParcsService],
+})
+export class ParcsModule {}

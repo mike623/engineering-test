@@ -1,0 +1,36 @@
+:root {
+  color-scheme: light dark;
+  --border: color-mix(in srgb, currentColor 15%, transparent);
+}
+
+body {
+  margin: 0;
+  padding: 2rem 1.5rem;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+li {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+p {
+  margin: 0;
+  opacity: 0.75;
+}
