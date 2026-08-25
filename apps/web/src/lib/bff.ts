@@ -61,3 +61,48 @@ export const getParcs = (): Promise<Collection<Parc>> => getCollection<Parc>('/p
 export const getUsers = (): Promise<Collection<User>> => getCollection<User>('/users');
 
 export const getBookings = (): Promise<Collection<Booking>> => getCollection<Booking>('/bookings');
+
+export type CreateUserResult =
+  | { status: 'created'; user: User }
+  | { status: 'conflict' }
+  | { status: 'invalid'; message: string }
+  /** Nothing was written; trying again is safe. */
+  | { status: 'retryable' }
+  /** Confirmed not written. */
+  | { status: 'failed' }
+  /** It may or may not have been written. The user must check before retrying. */
+  | { status: 'unconfirmed' };
+
+export async function createUser(payload: {
+  name: string;
+  email: string;
+}): Promise<CreateUserResult> {
+  const response = await fetch(`${BFF_URL}/users`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  if (response.status === 201) {
+    return { status: 'created', user: (await response.json()) as User };
+  }
+
+  const body = (await response.json().catch(() => ({}))) as { code?: string; message?: string };
+
+  switch (body.code) {
+    case 'EMAIL_IN_USE':
+      return { status: 'conflict' };
+    case 'PRECHECK_FAILED':
+      return { status: 'retryable' };
+    case 'WRITE_FAILED':
+      return { status: 'failed' };
+    case 'WRITE_UNCONFIRMED':
+      return { status: 'unconfirmed' };
+    default:
+      return {
+        status: 'invalid',
+        message: [body.message].flat().join(', ') || `The BFF responded ${response.status}`,
+      };
+  }
+}

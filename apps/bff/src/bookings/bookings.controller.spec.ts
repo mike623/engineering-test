@@ -1,8 +1,7 @@
 import { INestApplication } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { UpstreamExceptionFilter } from '../upstream/upstream-exception.filter';
+import { CoreModule } from '../core/core.module';
 import { UpstreamClient } from '../upstream/upstream.client';
 import { UpstreamClientError } from '../upstream/upstream.errors';
 import { BookingsModule } from './bookings.module';
@@ -44,8 +43,7 @@ describe('GET /bookings', () => {
     get.mockReset();
 
     const moduleRef = await Test.createTestingModule({
-      imports: [BookingsModule],
-      providers: [{ provide: APP_FILTER, useClass: UpstreamExceptionFilter }],
+      imports: [CoreModule, BookingsModule],
     })
       .overrideProvider(UpstreamClient)
       .useValue({ get })
