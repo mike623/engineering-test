@@ -10,28 +10,32 @@ export interface User {
   email: string;
 }
 
+export interface Collection<T> {
+  items: T[];
+  /** Records the BFF withheld because upstream sent them malformed. */
+  dropped: number;
+}
+
 const BFF_URL = process.env.BFF_URL ?? 'http://localhost:3002';
 
 /**
  * Freshness is the BFF's decision, not ours — it serves the newest payload it
- * can reach and says so in `X-Cache`. Caching again here would only hide that.
+ * can reach and describes what it did in the response headers. Caching again
+ * here would only hide that.
  */
-export async function getParcs(): Promise<Parc[]> {
-  const response = await fetch(`${BFF_URL}/parcs`, { cache: 'no-store' });
+async function getCollection<T>(path: string): Promise<Collection<T>> {
+  const response = await fetch(`${BFF_URL}${path}`, { cache: 'no-store' });
 
   if (!response.ok) {
-    throw new Error(`The BFF responded ${response.status} for /parcs`);
+    throw new Error(`The BFF responded ${response.status} for ${path}`);
   }
 
-  return response.json();
+  return {
+    items: (await response.json()) as T[],
+    dropped: Number(response.headers.get('X-Dropped-Records') ?? 0),
+  };
 }
 
-export async function getUsers(): Promise<User[]> {
-  const response = await fetch(`${BFF_URL}/users`, { cache: 'no-store' });
+export const getParcs = (): Promise<Collection<Parc>> => getCollection<Parc>('/parcs');
 
-  if (!response.ok) {
-    throw new Error(`The BFF responded ${response.status} for /users`);
-  }
-
-  return response.json();
-}
+export const getUsers = (): Promise<Collection<User>> => getCollection<User>('/users');

@@ -1,7 +1,8 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import { Controller, Get, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { Parc } from './parc';
 import { ParcsService } from './parcs.service';
+import { reportCacheState, reportDropped } from '../http/response-metadata';
 
 @Controller('parcs')
 export class ParcsController {
@@ -9,13 +10,23 @@ export class ParcsController {
 
   @Get()
   async findAll(@Res({ passthrough: true }) response: Response): Promise<Parc[]> {
-    const result = await this.parcs.findAll();
+    const { items, dropped } = await this.parcs.findAll();
 
-    // Set only once the call has succeeded: a failed response has no cache
-    // state to report, and claiming one would be a lie. Nothing is cached yet,
-    // so every success is served straight from upstream.
-    response.setHeader('X-Cache', 'miss');
+    reportCacheState(response, 'miss');
+    reportDropped(response, dropped);
 
-    return result;
+    return items;
+  }
+
+  @Get(':id')
+  async findOne(
+    @Param('id') id: string,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<Parc> {
+    const parc = await this.parcs.findOne(id);
+
+    reportCacheState(response, 'miss');
+
+    return parc;
   }
 }

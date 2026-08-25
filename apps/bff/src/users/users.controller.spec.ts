@@ -11,6 +11,9 @@ import {
 import { UpstreamClient } from '../upstream/upstream.client';
 import { UsersModule } from './users.module';
 
+const ADA = { id: '0f9c2b14-6d3a-4f8e-8c5b-1e2d3a4b5c6d', name: 'Ada', email: 'ada@example.com' };
+const GRACE = { id: 'b6d1f0a2-9c47-4f3b-8a11-7e5c2d9b0f34', name: 'Grace', email: 'grace@example.com' };
+
 describe('GET /users', () => {
   let app: INestApplication;
   const get = jest.fn();
@@ -35,12 +38,41 @@ describe('GET /users', () => {
   });
 
   it('returns the users unwrapped from the upstream envelope', async () => {
-    get.mockResolvedValue({ data: [{ id: 'u1', name: 'Ada', email: 'ada@example.com' }] });
+    get.mockResolvedValue({ data: [ADA] });
 
     const response = await request(app.getHttpServer()).get('/users').expect(200);
 
-    expect(response.body).toEqual([{ id: 'u1', name: 'Ada', email: 'ada@example.com' }]);
+    expect(response.body).toEqual([ADA]);
     expect(response.headers['x-cache']).toBe('miss');
+    expect(response.headers['x-dropped-records']).toBeUndefined();
+  });
+
+  it('drops rows that do not match the contract and says how many', async () => {
+    get.mockResolvedValue({
+      data: [ADA, { id: 'not-a-uuid', name: 'Bad id', email: 'bad@example.com' }, GRACE],
+    });
+
+    const response = await request(app.getHttpServer()).get('/users').expect(200);
+
+    expect(response.body).toEqual([ADA, GRACE]);
+    expect(response.headers['x-dropped-records']).toBe('1');
+  });
+
+  it('withholds a row whose email upstream never validated on the way in', async () => {
+    get.mockResolvedValue({
+      data: [ADA, { ...GRACE, email: 'not an address' }],
+    });
+
+    const response = await request(app.getHttpServer()).get('/users').expect(200);
+
+    expect(response.body).toEqual([ADA]);
+    expect(response.headers['x-dropped-records']).toBe('1');
+  });
+
+  it('answers 502 when upstream sends something that is not a list at all', async () => {
+    get.mockResolvedValue({ data: { id: ADA.id } });
+
+    await request(app.getHttpServer()).get('/users').expect(502);
   });
 
   it('answers 502 when upstream was called and kept failing', async () => {

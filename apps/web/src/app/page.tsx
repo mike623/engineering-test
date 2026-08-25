@@ -1,3 +1,4 @@
+import { IncompleteNotice } from '@/components/incomplete-notice';
 import { getParcs } from '@/lib/bff';
 
 // Rendered per request: the point of the BFF is that it holds the freshest
@@ -5,13 +6,14 @@ import { getParcs } from '@/lib/bff';
 export const dynamic = 'force-dynamic';
 
 export default async function ParcsPage() {
-  const parcs = await getParcs();
+  const { items, dropped } = await getParcs();
 
   return (
     <main>
       <h1>Parcs</h1>
+      <IncompleteNotice dropped={dropped} />
       <ul>
-        {parcs.map((parc) => (
+        {items.map((parc) => (
           <li key={parc.id}>
             <h2>{parc.name}</h2>
             <p>{parc.description}</p>

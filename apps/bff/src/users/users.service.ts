@@ -1,16 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { UpstreamClient } from '../upstream/upstream.client';
+import { validateList, ValidatedList } from '../validation/validate';
 import { User } from './user';
 
-const ROUTE = 'GET /users';
+const LIST = 'GET /users';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(private readonly upstream: UpstreamClient) {}
 
-  async findAll(): Promise<User[]> {
-    const body = await this.upstream.get<{ data: User[] }>(ROUTE, '/users');
+  async findAll(): Promise<ValidatedList<User>> {
+    const body = await this.upstream.get<{ data: unknown }>(LIST, '/users');
 
-    return body.data;
+    return validateList(User, body?.data, LIST, this.logger);
   }
 }

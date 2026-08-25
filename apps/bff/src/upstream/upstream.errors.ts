@@ -18,3 +18,10 @@ export class UpstreamFailureError extends Error {
     super(`Upstream call to ${route} failed`);
   }
 }
+
+/** Upstream answered, but its answer did not match the contract we hold it to. */
+export class UpstreamContractError extends Error {
+  constructor(readonly route: string, readonly detail: string) {
+    super(`Upstream response for ${route} failed validation: ${detail}`);
+  }
+}

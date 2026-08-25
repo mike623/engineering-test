@@ -8,6 +8,7 @@ import { Response } from 'express';
 import {
   BreakerOpenError,
   UpstreamClientError,
+  UpstreamContractError,
   UpstreamFailureError,
 } from './upstream.errors';
 
@@ -17,7 +18,7 @@ const RETRY_AFTER_SECONDS = 10;
  * Turns the three upstream failure shapes into the statuses the failure map in
  * NOTES.md promises, in one place, so no controller has to.
  */
-@Catch(BreakerOpenError, UpstreamClientError, UpstreamFailureError)
+@Catch(BreakerOpenError, UpstreamClientError, UpstreamContractError, UpstreamFailureError)
 export class UpstreamExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(UpstreamExceptionFilter.name);
 
@@ -42,6 +43,15 @@ export class UpstreamExceptionFilter implements ExceptionFilter {
           ? error.body
           : { statusCode: error.status, message: error.message },
       );
+
+      return;
+    }
+
+    if (error instanceof UpstreamContractError) {
+      // Already logged where it was detected, with the failing constraints.
+      response
+        .status(502)
+        .json({ statusCode: 502, message: 'Upstream response failed validation' });
 
       return;
     }
