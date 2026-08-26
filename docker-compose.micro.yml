@@ -1,0 +1,48 @@
+# Third overlay, for the free-tier box this is deployed to: one core, one
+# gigabyte, and a public address.
+#
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.apps.yml \
+#                  -f docker-compose.micro.yml up -d web
+#
+# Two differences from a local run, both forced by that machine.
+#
+# Only the web application faces outwards. The other two files publish every
+# port on 0.0.0.0, which is right on a laptop and wrong on a public address:
+# this repository is public, so the database, Redis and the key browser would
+# be readable by anyone who cloned it. Reach them over an SSH tunnel instead.
+# `!override` matters — compose appends port lists across files, so without it
+# each service would keep its 0.0.0.0 binding and gain a second one.
+#
+# Tracing is off, and OpenObserve and RedisInsight never start: naming `web`
+# starts only what it depends on, and dropping the openobserve dependency from
+# the BFF takes it out of that graph. Both are worth more than a gigabyte can
+# spare. The traces are still reproducible locally — NOTES.md has the steps.
+services:
+  eurocamp-db:
+    ports: !override
+      - 127.0.0.1:5433:5432
+
+  eurocamp-api:
+    ports: !override
+      - 127.0.0.1:3001:8080
+
+  bff-redis:
+    ports: !override
+      - 127.0.0.1:6379:6379
+
+  bff:
+    ports: !override
+      - 127.0.0.1:3002:3002
+    environment:
+      # Empty, not absent: `startTracing` returns early on a falsy endpoint.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ''
+    depends_on: !override
+      bff-redis:
+        condition: service_healthy
+      eurocamp-api:
+        condition: service_started
+
+  web:
+    ports: !override
+      - 3000:3000

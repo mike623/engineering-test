@@ -4,6 +4,8 @@ import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis';
 
+let started: NodeSDK | undefined;
+
 /**
  * Started from `main.ts` before anything else is imported, because the
  * instrumentations patch modules as they are required — a module loaded first
@@ -38,14 +40,18 @@ export function startTracing(): void {
   });
 
   sdk.start();
+  started = sdk;
+}
 
-  // Spans are batched, so an unflushed exit loses the last few seconds —
-  // during an outage, exactly the interesting part.
-  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
-    process.once(signal, () => {
-      void sdk.shutdown().finally(() => process.exit(0));
-    });
-  }
+/**
+ * Spans are batched, so an unflushed exit loses the last few seconds — during
+ * an outage, exactly the interesting part.
+ *
+ * Called by the shutdown `main.ts` owns, after Nest has closed. Tracing is
+ * optional, so it does not get to decide when the process ends.
+ */
+export function stopTracing(): Promise<void> {
+  return started ? started.shutdown() : Promise.resolve();
 }
 
 /**
