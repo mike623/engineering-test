@@ -1,5 +1,53 @@
 # Notes
 
+## Live deployment
+
+<https://130-162-182-197.sslip.io> — the three pages, server-rendered, against
+the supplied API and the failures it injects on purpose. Seeded with 20 parcs,
+30 users and 10 bookings.
+
+The traces are at <https://traces.130-162-182-197.sslip.io>. Credentials on
+request: this repository is public, so they are in an untracked `.env.deploy`
+rather than in `docker-compose.apps.yml`, whose committed OpenObserve password
+is a local-only default.
+
+It runs on an Oracle always-free `VM.Standard.A1.Flex` — 2 OCPU, 12 GB,
+uk-london-1 — as eight containers from the three compose files:
+
+```bash
+docker compose --env-file .env.deploy \
+               -f docker-compose.yml \
+               -f docker-compose.apps.yml \
+               -f docker-compose.deploy.yml up -d
+```
+
+Only 80 and 443 are reachable. Caddy terminates TLS and proxies inwards, so the
+web application, the BFF, the database, Redis, the key browser and the trace UI
+publish to the loopback address only — verified from outside, where 3000, 3002,
+5080 and 5540 all refuse. The certificates are real Let's Encrypt ones: sslip.io
+resolves any name containing a dashed IP address to that address, so two working
+names existed before anything was configured, and neither needs a DNS record.
+
+Two things this cost, worth recording rather than hiding.
+
+The x86 always-free shape cannot host this. `VM.Standard.E2.1.Micro` is
+burstable from a baseline of one eighth of an OCPU, and building here spends
+that budget: `npm ci` for the supplied API took 62 minutes, after which `top`
+showed **94% steal** and `docker create` timed out at 100 seconds. Nothing was
+broken — the hypervisor had stopped handing over CPU. The ARM shape is not
+burstable and showed 0% steal, and the same build took minutes.
+
+Deployment is manual. There is no pipeline: the box clones this repository,
+builds, and is updated with `git pull` and a rebuild. For a submission that is
+the honest scope; anything more would be pipeline work the exercise did not ask
+for.
+
+To remove it entirely:
+
+```bash
+oci compute instance terminate --instance-id <ocid> --force
+```
+
 ## Toolchain version misalignment
 
 The supplied workspace is pinned to a 2023-era toolchain. This constrains where

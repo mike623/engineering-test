@@ -1,5 +1,8 @@
 # Eurocamp engineering test — submission
 
+Running at <https://130-162-182-197.sslip.io>. NOTES.md has what is deployed
+there and what is deliberately not.
+
 Three independent applications:
 
 | Directory | What it is | Port |
