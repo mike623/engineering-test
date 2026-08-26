@@ -1,10 +1,19 @@
 import { AlertTriangle, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { TraceReference } from '@/components/trace-reference';
 import { formatAge } from '@/lib/format-age';
 
 // role="status" rather than the component's default "alert": neither notice is
 // an error the user must act on, and a polite live region does not interrupt.
-export function StaleNotice({ stale, ageSeconds }: { stale: boolean; ageSeconds: number }) {
+export function StaleNotice({
+  stale,
+  ageSeconds,
+  traceId,
+}: {
+  stale: boolean;
+  ageSeconds: number;
+  traceId?: string | null;
+}) {
   if (!stale) {
     return null;
   }
@@ -16,6 +25,7 @@ export function StaleNotice({ stale, ageSeconds }: { stale: boolean; ageSeconds:
       <AlertDescription className="text-amber-900/80">
         The live service is unavailable, so this is the last data we could fetch,
         from {formatAge(ageSeconds)}.
+        <TraceReference traceId={traceId} />
       </AlertDescription>
     </Alert>
   );

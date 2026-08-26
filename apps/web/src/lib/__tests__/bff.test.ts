@@ -32,7 +32,12 @@ describe('reading through the BFF', () => {
   it('reads how the response was produced from the headers, not the body', async () => {
     fetchMock.mockResolvedValue(
       respond([{ id: 'u1', name: 'Ada', email: 'ada@example.com' }], {
-        headers: { 'X-Cache': 'stale', Age: '120', 'X-Dropped-Records': '2' },
+        headers: {
+          'X-Cache': 'stale',
+          Age: '120',
+          'X-Dropped-Records': '2',
+          'X-Trace-Id': 'db092f9c03303c3fcca5cc29f154d27d',
+        },
       }),
     );
 
@@ -41,6 +46,9 @@ describe('reading through the BFF', () => {
       stale: true,
       ageSeconds: 120,
       dropped: 2,
+      // The one thing a user can quote that finds their own request rather
+      // than a search through everyone else's.
+      traceId: 'db092f9c03303c3fcca5cc29f154d27d',
     });
   });
 
@@ -71,10 +79,13 @@ describe('creating a user through the BFF', () => {
     ['WRITE_FAILED', 502, 'failed'],
     ['WRITE_UNCONFIRMED', 502, 'unconfirmed'],
   ])('maps %s onto a distinct outcome', async (code, status, expected) => {
-    fetchMock.mockResolvedValue(respond({ code, message: '…' }, { status }));
+    fetchMock.mockResolvedValue(
+      respond({ code, message: '…' }, { status, headers: { 'X-Trace-Id': 'abc123' } }),
+    );
 
     await expect(createUser({ name: 'Grace', email: 'grace@example.com' })).resolves.toEqual({
       status: expected,
+      traceId: 'abc123',
     });
   });
 
@@ -85,6 +96,7 @@ describe('creating a user through the BFF', () => {
     await expect(createUser({ name: 'Grace', email: 'grace@example.com' })).resolves.toEqual({
       status: 'created',
       user,
+      traceId: null,
     });
   });
 });

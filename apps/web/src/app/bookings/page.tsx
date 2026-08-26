@@ -26,14 +26,14 @@ function Unresolved({ children }: { children: string }) {
 }
 
 export default async function BookingsPage() {
-  const { items, dropped, stale, ageSeconds } = await getBookings();
+  const { items, dropped, stale, ageSeconds, traceId } = await getBookings();
 
   return (
     <main className="mx-auto max-w-4xl">
       <PageHeader action={<RefreshButton resource="/bookings" page="/bookings" />} title="Bookings">
         <RowCount shown={items.length} noun="booking" />
       </PageHeader>
-      <StaleNotice stale={stale} ageSeconds={ageSeconds} />
+      <StaleNotice stale={stale} ageSeconds={ageSeconds} traceId={traceId} />
       <IncompleteNotice dropped={dropped} />
       <Card className="overflow-hidden py-0">
         <Table>

@@ -10,14 +10,14 @@ import { getParcs } from '@/lib/bff';
 export const dynamic = 'force-dynamic';
 
 export default async function ParcsPage() {
-  const { items, dropped, stale, ageSeconds } = await getParcs();
+  const { items, dropped, stale, ageSeconds, traceId } = await getParcs();
 
   return (
     <main className="mx-auto max-w-4xl">
       <PageHeader action={<RefreshButton resource="/parcs" page="/" />} title="Parcs">
         <RowCount shown={items.length} noun="parc" />
       </PageHeader>
-      <StaleNotice stale={stale} ageSeconds={ageSeconds} />
+      <StaleNotice stale={stale} ageSeconds={ageSeconds} traceId={traceId} />
       <IncompleteNotice dropped={dropped} />
       <Card className="overflow-hidden py-0">
         <Table>

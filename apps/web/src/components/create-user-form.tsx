@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TraceReference } from '@/components/trace-reference';
 import type { CreateUserResult } from '@/lib/bff';
 
 /**
@@ -33,9 +34,15 @@ function Outcome({ result }: { result: CreateUserResult }) {
       : 'border-amber-500/40 bg-amber-50 text-amber-900';
 
   return (
-    <p role="status" className={`rounded-md border px-3 py-2 text-sm ${tone}`}>
-      {result.status === 'invalid' ? result.message : message}
-    </p>
+    <div role="status" className={`rounded-md border px-3 py-2 text-sm ${tone}`}>
+      <p>{result.status === 'invalid' ? result.message : message}</p>
+      {/* Only where the user may have to ask someone what happened. A created
+          user needs no reference; an unconfirmed one is the whole reason this
+          exists. */}
+      {result.status === 'created' || result.status === 'conflict' ? null : (
+        <TraceReference traceId={result.traceId} />
+      )}
+    </div>
   );
 }
 

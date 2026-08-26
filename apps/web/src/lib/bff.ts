@@ -32,6 +32,12 @@ export interface Collection<T> {
   stale: boolean;
   /** Age of the payload in seconds. Zero unless it came from the fallback. */
   ageSeconds: number;
+  /**
+   * The BFF's id for the request that produced this. Shown to the user only
+   * when something went wrong, since it is the one thing they can quote that
+   * leads to the trace of their own request.
+   */
+  traceId: string | null;
 }
 
 const BFF_URL = process.env.BFF_URL ?? 'http://localhost:3002';
@@ -53,6 +59,7 @@ async function getCollection<T>(path: string): Promise<Collection<T>> {
     dropped: Number(response.headers.get('X-Dropped-Records') ?? 0),
     stale: response.headers.get('X-Cache') === 'stale',
     ageSeconds: Number(response.headers.get('Age') ?? 0),
+    traceId: response.headers.get('X-Trace-Id'),
   };
 }
 
@@ -62,16 +69,23 @@ export const getUsers = (): Promise<Collection<User>> => getCollection<User>('/u
 
 export const getBookings = (): Promise<Collection<Booking>> => getCollection<Booking>('/bookings');
 
-export type CreateUserResult =
-  | { status: 'created'; user: User }
-  | { status: 'conflict' }
-  | { status: 'invalid'; message: string }
-  /** Nothing was written; trying again is safe. */
-  | { status: 'retryable' }
-  /** Confirmed not written. */
-  | { status: 'failed' }
-  /** It may or may not have been written. The user must check before retrying. */
-  | { status: 'unconfirmed' };
+/** Carried by every outcome; the caller decides which ones are worth showing. */
+interface Traced {
+  traceId?: string | null;
+}
+
+export type CreateUserResult = Traced &
+  (
+    | { status: 'created'; user: User }
+    | { status: 'conflict' }
+    | { status: 'invalid'; message: string }
+    /** Nothing was written; trying again is safe. */
+    | { status: 'retryable' }
+    /** Confirmed not written. */
+    | { status: 'failed' }
+    /** It may or may not have been written. The user must check before retrying. */
+    | { status: 'unconfirmed' }
+  );
 
 export async function createUser(payload: {
   name: string;
@@ -84,25 +98,28 @@ export async function createUser(payload: {
     cache: 'no-store',
   });
 
+  const traceId = response.headers.get('X-Trace-Id');
+
   if (response.status === 201) {
-    return { status: 'created', user: (await response.json()) as User };
+    return { status: 'created', user: (await response.json()) as User, traceId };
   }
 
   const body = (await response.json().catch(() => ({}))) as { code?: string; message?: string };
 
   switch (body.code) {
     case 'EMAIL_IN_USE':
-      return { status: 'conflict' };
+      return { status: 'conflict', traceId };
     case 'PRECHECK_FAILED':
-      return { status: 'retryable' };
+      return { status: 'retryable', traceId };
     case 'WRITE_FAILED':
-      return { status: 'failed' };
+      return { status: 'failed', traceId };
     case 'WRITE_UNCONFIRMED':
-      return { status: 'unconfirmed' };
+      return { status: 'unconfirmed', traceId };
     default:
       return {
         status: 'invalid',
         message: [body.message].flat().join(', ') || `The BFF responded ${response.status}`,
+        traceId,
       };
   }
 }

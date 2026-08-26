@@ -104,6 +104,20 @@ as `trace_id=`, so the two can be joined. Sending your own `traceparent`
 header continues your trace rather than starting a new one, and the same id
 comes back.
 
+The web application shows the same id as `Reference <id>`, on the stale banner
+and on any create that did not plainly succeed — the cases where a user may
+have to ask someone what happened. It does not appear on a healthy page. The
+browser never talks to the BFF directly, so this is the only way that id
+reaches a person: every fetch happens in the Next server process, and the
+BFF's headers stop there.
+
+Finding a trace in the UI: the left nav opens on **Logs**, so choose
+**Traces**, make sure the stream dropdown says `default`, widen the range to
+**Past 1 Hours** and press **Run query** — or go straight to
+http://localhost:5080/web/traces?stream=default&period=1h&org_identifier=default.
+The OpenObserve container has no volume, so recreating it discards every
+trace stored so far.
+
 Traces answer the questions the status codes cannot. Search the `default`
 traces stream for:
 
