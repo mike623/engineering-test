@@ -642,6 +642,136 @@ The frontend is not instrumented, so a trace starts at the BFF rather than at
 the page render, and the supplied API is not instrumented either — the trace
 ends at our side of that call.
 
+## Breaking it on purpose
+
+The resilience is invisible while everything works, and the injected flakiness
+alone will not show it: reads are attempted three times, each failing 10% of
+the time, so a read falls back to the cache once in a thousand requests. To see
+any of it you have to take upstream away.
+
+Every command below assumes the full stack is up.
+
+### The amber "showing the last data we could fetch" banner
+
+The cache has to hold the key already — it is written only on a successful
+read — so warm it first.
+
+```bash
+curl -s localhost:3002/users > /dev/null          # warm the fallback
+docker compose -f docker-compose.yml -f docker-compose.apps.yml stop eurocamp-api
+open http://localhost:3000/users                  # banner, with an age and a reference
+```
+
+Put it back with `up -d --force-recreate eurocamp-api`, **not** `start`. Under
+podman a stopped container comes back with no IP and no network alias, so the
+BFF cannot resolve `eurocamp-api` and the page stays stale — looking exactly
+like a bug in the fallback rather than a quirk of the runtime. Docker Desktop
+keeps the alias and `start` is fine there.
+
+### The error page
+
+Same thing without warming the cache, or against a key never read before:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.apps.yml stop eurocamp-api
+curl -i localhost:3002/parcs/99999999-8888-7777-6666-555555555555
+```
+
+Upstream is unreachable and there is nothing stored to fall back to, so this is
+a genuine 502 and the web application renders the error boundary with a Try
+again button. That button is not a reload: it sends `retry=true`, which is the
+one caller an open breaker still lets through.
+
+### The breaker opening
+
+With upstream still stopped, make more than five failed calls, then ask:
+
+```bash
+for i in $(seq 1 8); do curl -s -o /dev/null localhost:3002/parcs; done
+curl -s localhost:3002/health/breakers
+```
+
+`GET /parcs` reads `open`. Requests now fail without a network call at all,
+which is the point — they are refused in microseconds rather than waiting out
+three timeouts. Bring upstream back and the ordinary page stays stale until
+either the reset timeout elapses or somebody presses Refresh.
+
+### A recovered write
+
+This one needs nothing broken; upstream breaks it for you.
+
+```bash
+curl -s -X POST localhost:3002/users -H 'content-type: application/json' \
+  -d '{"name":"Demo","email":"demo-1@example.com"}' -i | head -1
+curl -s localhost:3002/health/breakers      # recoveredWrites climbs
+```
+
+Roughly seven in ten of those return `201` after upstream reported `502`,
+because the row was committed before the failure was injected. The counter is
+the honest record of how often it happened.
+
+## Reading a failure in the traces
+
+Every response carries `X-Trace-Id`, including failures, and the web
+application prints the same id as `Reference` under the banner and under any
+create that did not plainly succeed. That id is the entry point:
+
+```bash
+curl -si localhost:3002/parcs | grep -i x-trace-id
+```
+
+Open http://localhost:5080/web/traces?stream=default&period=1h&org_identifier=default
+— the left nav opens on Logs, not Traces — and search `trace_id='<id>'`.
+
+### What a retry cycle looks like
+
+`axios-retry` makes three attempts inside one call, and each attempt is its own
+HTTP span beneath our span for the route. A read against a stopped upstream:
+
+```
+GET /parcs/:id                                    ERROR   1.94s
+  request handler - /parcs/:id                            1.94s
+    upstream GET /parcs/:id                       ERROR   1.94s   error_cause_code=ENOTFOUND
+      GET                                         ERROR   9.2ms     attempt 1
+      GET                                         ERROR   5.1ms     attempt 2
+      GET                                         ERROR   5.2ms     attempt 3
+    redis-GET                                             0.8ms   the fallback lookup
+```
+
+Counting the children is how you tell a single failure from an exhausted retry
+cycle, and the gaps between their start times are the backoff. The nested
+`redis-GET` is the safety net being consulted after the last attempt failed.
+
+Useful searches, all of which answer a question the HTTP status cannot:
+
+| Search | Answers |
+| --- | --- |
+| `write_recovered='true'` | Writes upstream reported as failed that had committed |
+| `error_type='BreakerOpenError'` | Requests refused without a network call |
+| `cache_state='stale'` | Reads answered from the fallback — these returned 200 |
+| `error_cause_code='ENOTFOUND'` | Upstream was not running, as opposed to answering badly |
+| `upstream_status_code=502` | Upstream answered, and the answer was the injected failure |
+
+That last distinction is the one worth having. `ENOTFOUND` is DNS,
+`ECONNREFUSED` is nothing listening, `ECONNABORTED` is our own timeout, and a
+status code means it answered — only the last of those is the exercise
+behaving as designed.
+
+Log lines carry the same id as `trace_id=`, so a line from `docker compose logs
+bff` and a span in the trace store can be joined:
+
+```
+WARN [SafetyNet] Serving users:list from cache, 49508ms old trace_id=5a388423…
+```
+
+## What is in the cache
+
+RedisInsight runs at http://localhost:5540 with the BFF's Redis already
+registered as "BFF safety net". It answers the question this design raises:
+what the fallback actually holds, and how old it is, before an outage starts
+rather than during one. Keys are `parcs:list`, `users:list`, `bookings:list`
+and one `users:<id>` per name resolved for a booking.
+
 ## How this was delivered
 
 Nine slices, each one a complete path through every layer rather than a layer

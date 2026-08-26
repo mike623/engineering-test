@@ -132,10 +132,26 @@ traces stream for:
 Tracing is off when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, which is how the
 BFF runs outside compose. See ADR 0003.
 
+### Seeing it fail
+
+The interesting behaviour is invisible while upstream is healthy, and the
+injected flakiness will not show it either — reads are retried three times, so
+a fallback happens about once in a thousand requests. NOTES.md has a section
+called "Breaking it on purpose" with the commands for each state: the stale
+banner, the error page, the breaker opening, and a recovered write. The
+section after it reads the same failures back out of the traces, including
+what a retry cycle looks like.
+
+### What is in the cache
+
+RedisInsight runs at http://localhost:5540 with the BFF's Redis already
+registered. Keys are `parcs:list`, `users:list`, `bookings:list` and one
+`users:<id>` per name resolved for a booking.
+
 ### Ports
 
 `3000` web, `3001` supplied API, `3002` BFF, `5080` OpenObserve, `5433`
-Postgres, `6379` Redis. The
+Postgres, `5540` RedisInsight, `6379` Redis. The
 supplied compose file publishes 5433 and 3001; if either is already taken on
 your machine, that bind fails before anything else runs.
 

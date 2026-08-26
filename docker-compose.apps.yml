@@ -28,6 +28,26 @@ services:
       timeout: 3s
       retries: 10
 
+  # A key browser for the safety net. What is actually in the cache is the
+  # question this design raises — how old the fallback for a key is, whether
+  # anything is there at all before an outage starts — and answering it
+  # otherwise means `redis-cli` inside a container.
+  redis-insight:
+    image: redis/redisinsight:latest
+    restart: unless-stopped
+    environment:
+      # Skip the connection wizard: the only database here is ours.
+      - RI_REDIS_HOST=bff-redis
+      - RI_REDIS_PORT=6379
+      - RI_REDIS_ALIAS=BFF safety net
+      # Otherwise the first thing anyone opening this sees is a consent form.
+      - RI_ACCEPT_TERMS_AND_CONDITIONS=true
+    ports:
+      - 5540:5540
+    depends_on:
+      bff-redis:
+        condition: service_healthy
+
   # Traces. Single binary, no collector in front of it — one more hop to run
   # and configure buys nothing at this size, and the SDK batches anyway.
   openobserve:
