@@ -718,17 +718,39 @@ keeps the alias and `start` is fine there.
 
 ### The error page
 
-Same thing without warming the cache, or against a key never read before:
+Same thing with nothing stored to fall back to, so empty the cache first:
 
 ```bash
+docker compose -f docker-compose.yml -f docker-compose.apps.yml exec bff-redis redis-cli flushall
 docker compose -f docker-compose.yml -f docker-compose.apps.yml stop eurocamp-api
-curl -i localhost:3002/parcs/99999999-8888-7777-6666-555555555555
 ```
 
-Upstream is unreachable and there is nothing stored to fall back to, so this is
-a genuine 502 and the web application renders the error boundary with a Try
-again button. That button is not a reload: it sends `retry=true`, which is the
-one caller an open breaker still lets through.
+Then open <http://localhost:3000/>. Upstream is unreachable and there is no
+earlier copy, so the read fails and the route's error boundary renders:
+
+```
+Something went wrong
+Nothing to show
+We could not load this page, and there was no earlier copy to fall back to.
+Try again
+```
+
+That button is not a reload: it sends `retry=true`, which is the one caller an
+open breaker still lets through.
+
+Use a browser rather than `curl` for this one. The boundary is a client
+component, so it renders after the stream rather than in the first bytes —
+`curl http://localhost:3000/` returns 200 and a shell with none of that text in
+it, which looks like the fallback silently working. To see the failure on the
+command line, ask the BFF instead, where it is a plain 502:
+
+```bash
+curl -i localhost:3002/parcs
+```
+
+Put the API back with `up -d --force-recreate eurocamp-api`, and expect the
+first call afterwards to still be a 502 — the breaker is open and only reopens
+on a probe.
 
 ### The breaker opening
 

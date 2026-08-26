@@ -13,12 +13,13 @@ Three independent applications:
 
 The reasoning — database review, API findings, design decisions, what I would
 change with more time — is in [NOTES.md](./NOTES.md). Diagrams are in
-[docs/architecture.md](./docs/architecture.md), and the two decisions worth
+[docs/architecture.md](./docs/architecture.md), and the three decisions worth
 arguing about have their own records in [docs/adr](./docs/adr).
 
 ## Prerequisites
 
-- Docker — for the supplied API, its database, and Redis
+- Docker — for the supplied API and its database, Redis, and the two
+  observability containers the compose command below starts
 - Node 22 (`.nvmrc` pins it; `nvm use` picks it up) and npm 9+
 - git
 
@@ -34,11 +35,14 @@ docker compose -f docker-compose.yml -f docker-compose.apps.yml up --build -d
 docker compose -f docker-compose.yml -f docker-compose.apps.yml exec eurocamp-api npm run seed:run
 ```
 
-Merging both files puts all five services on one network, so they reach each
-other by name. Then open http://localhost:3000.
+Merging both files puts all seven services on one network, so they reach each
+other by name: the supplied API and its database, Redis, the BFF, the web
+application, and — for traces and for reading the cache — OpenObserve and
+RedisInsight. Then open http://localhost:3000.
 
 The supplied `docker-compose.yml` and `Dockerfile.dev` are unchanged. The
-second file adds Redis, the BFF and the web application, and builds the
+second file adds Redis, the BFF, the web application, OpenObserve and
+RedisInsight, and builds the
 supplied API from `docker/eurocamp-api.Dockerfile` — its own Dockerfile does
 not build on Apple Silicon at all, and that copy adds the three packages it
 is missing. Finding 8 in NOTES.md has the detail.
