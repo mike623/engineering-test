@@ -208,7 +208,7 @@ Two opossum settings are load-bearing and non-obvious:
   timeouts count toward the breaker.
 
 Breakers are held in a registry keyed on the route *template*
-(`GET /api/1/parcs/:id`), never the resolved path. Keying on the concrete uuid
+(`GET /parcs/:id`), never the resolved path. Keying on the concrete uuid
 would create one breaker per id, each with a sample size of one, none ever
 reaching `volumeThreshold`. Writes bypass the registry entirely: an open
 breaker on a write means we stop calling an endpoint that is succeeding 30% of
@@ -268,7 +268,7 @@ X-Dropped-Records: 2
 ```
 
 ```json
-[ { "id": "…", "userName": "User 7", … } ]
+[ { "id": "…", "bookingDate": "…", "user": { "id": "…", "name": "User 7" }, … } ]
 ```
 
 `Age` is a standard HTTP response header carrying seconds since the payload was
@@ -280,7 +280,7 @@ staleness, but the `Warning` header was deprecated in RFC 9111.)
 
 Choosing headers over an envelope buys several things at once. Consumers get
 the resource directly instead of reaching through `.data`, so a generated
-client, TanStack Query and curl all behave naturally. Types stay as `Booking[]`
+client, any data-fetching library and curl all behave naturally. Types stay as `Booking[]`
 rather than `Envelope<Booking[]>`. And intermediaries can act on the metadata —
 a cache or gateway can read `Age`, whereas it cannot parse a body, which was
 one of the objections raised against gateway caching earlier.
@@ -517,6 +517,9 @@ last-known-good payload to serve.
 | Response fails validation entirely | `502`; cache left untouched |
 | Breaker open, cached payload exists | `200`, `X-Cache: stale`, `Age` |
 | Breaker open, no cache | `503` with `Retry-After` — upstream was never called |
+| Breaker open, `?retry=true` from a person | One probe is sent; success closes the breaker |
+| Breaker open, `?retry=true` inside the probe window | Refused as above; nothing sent |
+| Enrichment lookup fails or is refused | Row renders with the name as `null` |
 | Pre-check finds address already present | `409`, no write attempted |
 | Pre-check read fails, or its breaker is open | `503` with `Retry-After`, no write attempted |
 | Write failed, reconciliation found row | `201`; logged and counted as recovered |
@@ -538,31 +541,44 @@ endpoints actually called, that leaves a residual failure probability near
 1e-3, and serving stale makes even that case benign. Four attempts would reach
 1e-4 at the cost of a 14s spinner, which is the wrong trade for a page load.
 
-## Delivery phases
+## How this was delivered
 
-| Phase | Scope |
-| --- | --- |
-| P1 | Resilient HTTP client: timeout, `axios-retry`, `opossum` registry |
-| P2 | Response DTOs with `class-validator`, drop-and-report on lists |
-| P3 | BFF endpoints, cache with 30s TTL, serve-stale-on-failure |
-| P4 | Backend tests: retry counts, breaker transitions, reconciliation |
-| P5 | Next: server-rendered list pages, error boundary, loading states |
-| P6 | TanStack client islands: retry control, stale banner |
-| P7 | React Testing Library coverage of error, stale and retry states |
-| P8 | Notes, ADR, README run instructions |
-| P9 | Deployment (only once P1–P8 are green) |
+Nine slices, each one a complete path through every layer rather than a layer
+at a time, so every step of the way there was something that ran and could be
+demonstrated. They were tracked as GitHub issues with their blocking edges
+recorded, which is also how the ordering below was decided.
 
-ADR 0001 and the run instructions are written alongside P1–P3 rather than left
-to P8, since they are the parts most likely to be rushed at the end and the
-reasoning is clearest while the code they describe is being written.
+| # | Slice | Blocked by |
+| --- | --- | --- |
+| 1 | Walking skeleton: parcs list end to end | — |
+| 2 | Resilient reads: users list survives a flaky endpoint | 1 |
+| 3 | Malformed upstream data degrades instead of blanking the page | 2 |
+| 4 | Cache as safety net: pages survive upstream going down | 3 |
+| 5 | Bookings show who booked what | 4 |
+| 6 | Creating a user is safe against a mostly-failing write | 3 |
+| 7 | Breaker state is visible and the retry control genuinely retries | 4 |
+| 8 | A reviewer can run everything from the README | 1 |
+| 9 | Submission polish | 5, 6, 7, 8 |
+
+An earlier draft of this plan was layered by concern — HTTP client, then
+validation, then endpoints, then tests, then the frontend — and it was wrong
+for the same reason it always is: nothing is demonstrable until the last
+layer lands, and the frontend work is what gets cut when time runs out. The
+vertical version put the first page on screen in slice one and kept the
+failure handling honest, because each slice had to survive being pointed at.
+
+Deployment was scoped out. On a screen-share the interesting states are the
+degraded ones, and staging an outage against a local stack is easier to show
+and easier to trust than the same thing against a deployed one.
 
 ## Testing approach
 
-Tests intercept HTTP rather than mocking modules, so what is asserted is what
-actually left the process. `nock` does that in the BFF and `msw` does it in the
-web application. The intention was one library for both halves; `msw`'s CommonJS
-build pulls an ESM-only transitive dependency that Jest cannot `require`, and
-converting the BFF suite to ESM to accommodate a test double was a poor trade.
+Tests intercept the network rather than mocking the module in front of it, so
+what is asserted is what would actually leave the process. `nock` does that in
+the BFF; the web application stubs `fetch` itself, which is the same boundary
+in the browser. The intention was `msw` for both halves — its CommonJS build
+pulls an ESM-only transitive dependency that Jest cannot `require`, and
+converting a suite to ESM to accommodate a test double was a poor trade.
 
 Retry and breaker timing is controlled by configuration — the whole resilience
 policy is a plain `UpstreamConfig` object, so a test constructs a client with a
@@ -570,12 +586,20 @@ policy is a plain `UpstreamConfig` object, so a test constructs a client with a
 with promise scheduling and produce intermittent failures, which is a poor look
 in a submission about handling intermittent failures.
 
-Backend cases: N attempts then success; exhausted retries surfacing an error;
-the breaker opening and stopping outbound requests; a half-open probe closing
-it; and reconciliation finding a committed row and recording a recovered write.
+54 backend cases and 21 frontend ones. The backend ones worth naming: three
+attempts then success; a per-attempt timeout ending a call that never answers;
+the breaker opening only after whole retry *cycles* fail, then issuing nothing
+at all; a 4xx not counting toward it; writes neither retried nor gated by it; a
+forced probe closing the breaker and its rate limit; the safety net refusing to
+fall back on a client error; a cache that hangs not holding the request open;
+and every one of the five write outcomes, including the write being attempted
+at most once.
 
-Frontend cases: loading state, error state with a working retry control, stale
-banner with cached data, and partial-data rendering with "Unknown user".
+The frontend ones assert the degraded states, since those are the ones that go
+wrong quietly: the error panel and its retry control, the age wording on the
+stale banner, the withheld-record count, and the three write outcomes staying
+distinguishable — "safe to try again" must never appear on an outcome that was
+never confirmed.
 
 ## Task 2 — current practice
 
@@ -656,15 +680,21 @@ degraded paths — retries exhausted, breaker opened, stale payload served, writ
 recovered — are what make a resilient system operable rather than merely quiet.
 OpenTelemetry has become the default vocabulary for this.
 
-### Two more, not demonstrated here
+### Tests belong against the boundary, not the module in front of it
 
-Schema changes belong in versioned migrations rather than being inferred from
-entity metadata at boot; the database review above makes that case against the
-supplied `synchronize: true` configuration. And tests are increasingly written
-against the network boundary — intercepting HTTP rather than mocking modules —
-so that the test exercises the real client, its retry policy and its
-serialisation, instead of a stub that cannot fail the way production does.
+A suite that mocks its own HTTP client asserts that the code calls a function.
+Intercepting the network instead — `nock` here on the server, a stubbed `fetch`
+in the browser — exercises the real client, its retry policy and its
+serialisation, so the resilience being claimed is the resilience being tested.
+It is the difference between proving the breaker opens and proving a mock was
+called three times.
+
+One more, not demonstrated here: schema changes belong in versioned migrations
+rather than being inferred from entity metadata at boot. The database review
+above makes that case against the supplied `synchronize: true`.
 
 ## Running the applications
 
-*(to be written alongside P1–P3)*
+See [README.md](./README.md) — prerequisites, the four steps, every environment
+variable with its default, and a short walkthrough of how to make the degraded
+states appear on purpose, since none of them are visible while the API behaves.

@@ -2,17 +2,6 @@
 
 Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
-## Before using `gh` in this repo
-
-`gh` infers the target repository from `git remote -v`. At the time of writing,
-`origin` still points at `git@github.com:Eurocamp/engineering-test.git` — the
-upstream repository, which this account does not own. Any `gh issue create` or
-`gh issue comment` run in that state would post publicly to somebody else's
-repository.
-
-Confirm `git remote -v` points at this fork's own public repository before
-running any command that writes. Read-only commands are harmless either way.
-
 ## Conventions
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
