@@ -22,9 +22,11 @@ export class ParcsService {
    * Only the validated result is handed to the safety net, so a malformed
    * response cannot poison the fallback.
    */
-  async findAll(options: ReadOptions = {}): Promise<Served<ValidatedList<Parc>>> {
+  async findAll(options: ReadOptions & { force?: boolean } = {}): Promise<Served<ValidatedList<Parc>>> {
     return this.safetyNet.read('parcs:list', async () => {
-      const body = await this.upstream.get<{ data: unknown }>(LIST, '/parcs');
+      const body = await this.upstream.get<{ data: unknown }>(LIST, '/parcs', {
+        force: options.force,
+      });
 
       return validateList(Parc, body?.data, LIST, this.logger);
     }, options);

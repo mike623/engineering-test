@@ -20,9 +20,9 @@ export class BookingsService {
     private readonly parcs: ParcsService,
   ) {}
 
-  async findAll(): Promise<Served<ValidatedList<EnrichedBooking>>> {
+  async findAll({ force = false } = {}): Promise<Served<ValidatedList<EnrichedBooking>>> {
     const served = await this.safetyNet.read('bookings:list', async () => {
-      const body = await this.upstream.get<{ data: unknown }>(LIST, '/bookings');
+      const body = await this.upstream.get<{ data: unknown }>(LIST, '/bookings', { force });
 
       return validateList(Booking, body?.data, LIST, this.logger);
     });

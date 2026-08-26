@@ -24,9 +24,9 @@ export class UpstreamClient {
    * @param route the route *template*, e.g. `GET /users/:id` — this keys the
    *   breaker, so it must not carry a resolved id.
    */
-  async get<T>(route: string, path: string): Promise<T> {
+  async get<T>(route: string, path: string, { force = false } = {}): Promise<T> {
     try {
-      const response = await this.breakers.fire(route, () => this.http.get<T>(path));
+      const response = await this.breakers.fire(route, () => this.http.get<T>(path), { force });
 
       return response.data;
     } catch (error) {

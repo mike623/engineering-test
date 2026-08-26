@@ -11,11 +11,45 @@ import { UPSTREAM_CONFIG } from './upstream.tokens';
 @Injectable()
 export class BreakerRegistry implements OnModuleDestroy {
   private readonly breakers = new Map<string, CircuitBreaker<[() => Promise<unknown>], unknown>>();
+  private readonly lastProbe = new Map<string, number>();
 
   constructor(@Inject(UPSTREAM_CONFIG) private readonly config: UpstreamConfig) {}
 
-  async fire<T>(route: string, call: () => Promise<T>): Promise<T> {
-    return this.breakerFor(route).fire(call) as Promise<T>;
+  /**
+   * @param force the caller is a person pressing retry, not a page load. An
+   *   open breaker exists to stop automatic traffic; refusing a human who is
+   *   sitting in front of the failure teaches them the button is a lie.
+   */
+  async fire<T>(route: string, call: () => Promise<T>, { force = false } = {}): Promise<T> {
+    const breaker = this.breakerFor(route);
+
+    if (force && breaker.opened && this.allowProbe(route)) {
+      const result = await call();
+
+      // It answered, so the outage is over as far as we can tell. Closing here
+      // rather than waiting out the reset timeout is the point of the probe.
+      breaker.close();
+
+      return result;
+    }
+
+    return breaker.fire(call) as Promise<T>;
+  }
+
+  /**
+   * Rate limited per route, so holding down the retry button cannot turn into
+   * the traffic the breaker opened to prevent.
+   */
+  private allowProbe(route: string): boolean {
+    const since = Date.now() - (this.lastProbe.get(route) ?? 0);
+
+    if (since < this.config.breaker.probeIntervalMs) {
+      return false;
+    }
+
+    this.lastProbe.set(route, Date.now());
+
+    return true;
   }
 
   states(): Record<string, 'closed' | 'open' | 'half-open'> {

@@ -23,8 +23,8 @@ export class UsersService {
     private readonly safetyNet: SafetyNet,
   ) {}
 
-  async findAll(): Promise<Served<ValidatedList<User>>> {
-    return this.safetyNet.read('users:list', () => this.listFromUpstream());
+  async findAll({ force = false } = {}): Promise<Served<ValidatedList<User>>> {
+    return this.safetyNet.read('users:list', () => this.listFromUpstream({ force }));
   }
 
   /**
@@ -129,8 +129,8 @@ export class UsersService {
    * our own write would make reconciliation report a failure for a write that
    * succeeded, which is the exact bug this whole path exists to avoid.
    */
-  private async listFromUpstream(): Promise<ValidatedList<User>> {
-    const body = await this.upstream.get<{ data: unknown }>(LIST, '/users');
+  private async listFromUpstream({ force = false } = {}): Promise<ValidatedList<User>> {
+    const body = await this.upstream.get<{ data: unknown }>(LIST, '/users', { force });
 
     return validateList(User, body?.data, LIST, this.logger);
   }

@@ -17,7 +17,12 @@ const config: UpstreamConfig = {
   timeoutMs: 50,
   retries: 2,
   retryDelayMs: 1,
-  breaker: { errorThresholdPercentage: 50, volumeThreshold: 3, resetTimeoutMs: 10_000 },
+  breaker: {
+    errorThresholdPercentage: 50,
+    volumeThreshold: 3,
+    resetTimeoutMs: 10_000,
+    probeIntervalMs: 5_000,
+  },
 };
 
 /** Counts what actually left the process, which is the thing under test. */
@@ -158,6 +163,84 @@ describe('the circuit breaker', () => {
     expect(breakers.states()).toEqual({ 'GET /users': 'closed' });
     // A 404 is not retried either — one attempt per call.
     expect(attempts).toBe(config.breaker.volumeThreshold + 1);
+  });
+});
+
+describe('a retry the user pressed', () => {
+  const failUntil = (recovers: () => boolean) =>
+    nock(HOST)
+      .persist()
+      .get(`${PREFIX}/users`)
+      .reply(() => {
+        onEveryRequest();
+
+        return recovers() ? [200, { data: [] }] : [502];
+      });
+
+  const openTheBreaker = async (client: UpstreamClient) => {
+    for (let cycle = 0; cycle < config.breaker.volumeThreshold; cycle += 1) {
+      await expect(client.get('GET /users', '/users')).rejects.toBeInstanceOf(UpstreamFailureError);
+    }
+
+    await expect(client.get('GET /users', '/users')).rejects.toBeInstanceOf(BreakerOpenError);
+  };
+
+  it('probes upstream even while the breaker is open, rather than refusing', async () => {
+    let recovered = false;
+    failUntil(() => recovered);
+    const client = build();
+    await openTheBreaker(client);
+    recovered = true;
+
+    await expect(client.get('GET /users', '/users', { force: true })).resolves.toEqual({ data: [] });
+  });
+
+  it('closes the breaker when the probe succeeds, so ordinary traffic resumes', async () => {
+    let recovered = false;
+    failUntil(() => recovered);
+    const breakers = registry();
+    const client = new UpstreamClient(createUpstreamHttp(config), breakers);
+    await openTheBreaker(client);
+    recovered = true;
+
+    await client.get('GET /users', '/users', { force: true });
+
+    expect(breakers.states()).toEqual({ 'GET /users': 'closed' });
+    await expect(client.get('GET /users', '/users')).resolves.toEqual({ data: [] });
+  });
+
+  it('leaves the breaker open when the probe fails', async () => {
+    failUntil(() => false);
+    const breakers = registry();
+    const client = new UpstreamClient(createUpstreamHttp(config), breakers);
+    await openTheBreaker(client);
+
+    await expect(
+      client.get('GET /users', '/users', { force: true }),
+    ).rejects.toBeInstanceOf(UpstreamFailureError);
+    expect(breakers.states()).toEqual({ 'GET /users': 'open' });
+  });
+
+  it('rate limits probes, so holding the button down is not a retry storm', async () => {
+    failUntil(() => false);
+    const client = build();
+    await openTheBreaker(client);
+
+    const attemptsBeforeProbing = attempts;
+    await expect(
+      client.get('GET /users', '/users', { force: true }),
+    ).rejects.toBeInstanceOf(UpstreamFailureError);
+    const attemptsAfterOneProbe = attempts;
+    expect(attemptsAfterOneProbe).toBeGreaterThan(attemptsBeforeProbing);
+
+    // Pressed again immediately: refused by the breaker, nothing sent.
+    for (let press = 0; press < 5; press += 1) {
+      await expect(
+        client.get('GET /users', '/users', { force: true }),
+      ).rejects.toBeInstanceOf(BreakerOpenError);
+    }
+
+    expect(attempts).toBe(attemptsAfterOneProbe);
   });
 });
 

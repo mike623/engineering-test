@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpException, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { reportAge, reportCacheState, reportDropped } from '../http/response-metadata';
 import { CreateUserDto } from './create-user.dto';
@@ -12,8 +12,11 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  async findAll(@Res({ passthrough: true }) response: Response): Promise<User[]> {
-    const { value, state, ageMs } = await this.users.findAll();
+  async findAll(
+    @Res({ passthrough: true }) response: Response,
+    @Query('retry') retry?: string,
+  ): Promise<User[]> {
+    const { value, state, ageMs } = await this.users.findAll({ force: retry === 'true' });
 
     reportCacheState(response, state);
     reportAge(response, ageMs);

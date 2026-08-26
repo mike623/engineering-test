@@ -11,6 +11,8 @@ export interface UpstreamConfig {
     /** Failed cycles observed before the breaker is allowed to open. */
     volumeThreshold: number;
     resetTimeoutMs: number;
+    /** Shortest gap between user-forced probes of an open breaker. */
+    probeIntervalMs: number;
   };
 }
 
@@ -26,5 +28,6 @@ export const upstreamConfigFromEnv = (env = process.env): UpstreamConfig => ({
     errorThresholdPercentage: number(env.BREAKER_ERROR_THRESHOLD_PERCENTAGE, 50),
     volumeThreshold: number(env.BREAKER_VOLUME_THRESHOLD, 5),
     resetTimeoutMs: number(env.BREAKER_RESET_TIMEOUT_MS, 10_000),
+    probeIntervalMs: number(env.BREAKER_PROBE_INTERVAL_MS, 5_000),
   },
 });

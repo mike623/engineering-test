@@ -1,4 +1,4 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { reportAge, reportCacheState, reportDropped } from '../http/response-metadata';
 import { EnrichedBooking } from './booking';
@@ -9,8 +9,11 @@ export class BookingsController {
   constructor(private readonly bookings: BookingsService) {}
 
   @Get()
-  async findAll(@Res({ passthrough: true }) response: Response): Promise<EnrichedBooking[]> {
-    const { value, state, ageMs } = await this.bookings.findAll();
+  async findAll(
+    @Res({ passthrough: true }) response: Response,
+    @Query('retry') retry?: string,
+  ): Promise<EnrichedBooking[]> {
+    const { value, state, ageMs } = await this.bookings.findAll({ force: retry === 'true' });
 
     // Describes the bookings themselves. A name that could not be resolved is
     // reported in the row, as `null`, rather than in the cache state.

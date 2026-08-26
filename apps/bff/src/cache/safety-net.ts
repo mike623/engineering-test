@@ -103,6 +103,13 @@ export class SafetyNet {
     }
   }
 
+  /** How old the fallback for this key is, or null if there is nothing stored. */
+  async ageOf(key: string): Promise<number | null> {
+    const entry = await this.recall<unknown>(key);
+
+    return entry ? Date.now() - entry.cachedAt : null;
+  }
+
   /**
    * A 4xx is upstream answering, not upstream failing. Falling back would
    * resurrect a deleted record and keep serving it for as long as the entry

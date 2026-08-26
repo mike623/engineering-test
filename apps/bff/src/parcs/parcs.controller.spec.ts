@@ -39,7 +39,7 @@ describe('parcs', () => {
 
       const response = await request(app.getHttpServer()).get('/parcs').expect(200);
 
-      expect(get).toHaveBeenCalledWith('GET /parcs', '/parcs');
+      expect(get).toHaveBeenCalledWith('GET /parcs', '/parcs', { force: false });
       expect(response.body).toEqual([DUINRELL]);
     });
 
@@ -50,6 +50,14 @@ describe('parcs', () => {
 
       expect(response.headers['x-cache']).toBe('miss');
       expect(response.body).toEqual([]);
+    });
+
+    it('forces a probe through an open breaker when a person pressed retry', async () => {
+      get.mockResolvedValue({ data: [DUINRELL] });
+
+      await request(app.getHttpServer()).get('/parcs?retry=true').expect(200);
+
+      expect(get).toHaveBeenCalledWith('GET /parcs', '/parcs', { force: true });
     });
 
     it('drops a malformed parc rather than failing the whole list', async () => {
