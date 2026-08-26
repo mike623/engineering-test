@@ -1,0 +1,10 @@
+# Two names on one address, both certificated automatically by Let's Encrypt.
+# PUBLIC_HOST is the sslip.io name for this host: sslip.io resolves any name
+# containing a dashed IP to that IP, so no DNS record has to exist anywhere.
+{$PUBLIC_HOST} {
+	reverse_proxy web:3000
+}
+
+traces.{$PUBLIC_HOST} {
+	reverse_proxy openobserve:5080
+}

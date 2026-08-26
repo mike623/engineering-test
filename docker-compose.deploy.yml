@@ -18,6 +18,23 @@
 # docker-compose.apps.yml. .env.deploy supplies them and is not in the
 # repository; OPENOBSERVE_BASIC_AUTH must be the base64 of email:password.
 services:
+  # Terminates TLS for both public names and proxies inwards, so the web
+  # application and the trace UI need no published port of their own.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      - PUBLIC_HOST=${PUBLIC_HOST}
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - web
+      - openobserve
+
   eurocamp-db:
     ports: !override
       - 127.0.0.1:5433:5432
@@ -40,8 +57,12 @@ services:
 
   openobserve:
     ports: !override
-      - 5080:5080
+      - 127.0.0.1:5080:5080
 
   web:
     ports: !override
-      - 3000:3000
+      - 127.0.0.1:3000:3000
+
+# Certificates survive a recreate; Let's Encrypt rate-limits repeat issuance.
+volumes:
+  caddy-data:
