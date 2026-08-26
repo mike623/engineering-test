@@ -7,9 +7,12 @@ startTracing();
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { configureApp } from './core/configure-app';
+import { TracingLogger } from './observability/tracing.logger';
 
 async function bootstrap(): Promise<void> {
-  const app = configureApp(await NestFactory.create(AppModule));
+  const app = configureApp(
+    await NestFactory.create(AppModule, { logger: new TracingLogger() }),
+  );
 
   await app.listen(Number(process.env.PORT ?? 3002));
 }

@@ -91,6 +91,19 @@ Open http://localhost:5080 and sign in with `root@example.com` /
 `Complexpass#123` — development credentials, in the compose file in plain
 sight on purpose.
 
+Every response carries the id of its own trace, on success and on failure:
+
+```bash
+curl -si localhost:3002/users | grep -i x-trace-id
+# X-Trace-Id: db092f9c03303c3fcca5cc29f154d27d
+```
+
+Paste that into the trace search and you get the request back, including the
+502 from upstream inside the 201 you were handed. Log lines carry the same id
+as `trace_id=`, so the two can be joined. Sending your own `traceparent`
+header continues your trace rather than starting a new one, and the same id
+comes back.
+
 Traces answer the questions the status codes cannot. Search the `default`
 traces stream for:
 

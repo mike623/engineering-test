@@ -37,6 +37,17 @@ the upstream client, the safety net, and the create path.
   `cache.age_ms` on whatever read is running, and `error.type` naming which of
   the three upstream errors ended a call — a refusal by an open breaker and a
   timeout are both "failed" and mean different things.
+- Every response carries `X-Trace-Id`, set by middleware ahead of routing so
+  it is present on failures too — the responses anyone actually wants to look
+  up. Without it the traces exist and no caller can name the one they mean.
+  The header is in `EXPOSED_HEADERS`, or the browser could not read it.
+- Inbound `traceparent` is honoured by the SDK's default W3C propagator, so a
+  caller that already has a trace id gets the same id back rather than a new
+  one, and one trace spans both sides.
+- The application logger appends `trace_id` to every line it already writes.
+  Logs and traces were otherwise two accounts of the same outage that could
+  not be joined: under concurrent traffic, "recovered a write" is true of some
+  request and nothing said which.
 - `error.type` is the class name rather than a message, so it groups. A trace
   search for `BreakerOpenError` answers "how much traffic did we refuse during
   that outage", which no HTTP status can.

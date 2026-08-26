@@ -3,7 +3,7 @@ import { Response } from 'express';
 export type CacheState = 'miss' | 'hit' | 'stale';
 
 /** The headers the web application is allowed to read across the CORS boundary. */
-export const EXPOSED_HEADERS = ['X-Cache', 'X-Dropped-Records', 'Age'];
+export const EXPOSED_HEADERS = ['X-Cache', 'X-Dropped-Records', 'Age', 'X-Trace-Id'];
 
 /**
  * Metadata about *how* a response was produced belongs in headers, not in a

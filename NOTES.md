@@ -613,8 +613,17 @@ what an open breaker refused, and `cache_state = 'stale'` counts reads served
 during an outage that returned 200 and are otherwise indistinguishable from
 healthy ones.
 
+Finding that trace requires being handed its id, so every response carries
+`X-Trace-Id` — set by middleware before routing, which is what puts it on the
+failures as well as the successes. The same id is appended to every log line
+as `trace_id=`, joining the two accounts of an outage that otherwise could not
+be joined: under concurrent traffic "Recovered a write upstream reported as
+failed" is true of *some* request and nothing said which. A caller that sends
+its own `traceparent` keeps its trace id rather than being given a new one.
+
 The frontend is not instrumented, so a trace starts at the BFF rather than at
-the page render.
+the page render, and the supplied API is not instrumented either — the trace
+ends at our side of that call.
 
 ## How this was delivered
 
