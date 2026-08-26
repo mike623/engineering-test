@@ -298,6 +298,44 @@ cache whose entire purpose is to report honestly how stale it is. The Next
 fetch cache is switched off for the same reason. What the frontend keeps is the
 part it cannot delegate: making the degraded states legible.
 
+### Why there is no cache in the browser
+
+Stated plainly because it reads like an omission: there is no TanStack Query,
+and the Next fetch cache is off (`cache: 'no-store'`, `force-dynamic`). That is
+a decision, and this is the argument for it.
+
+A cache in the browser would sit in front of a cache whose entire purpose is to
+report honestly how stale it is. `X-Cache` and `Age` describe the moment the BFF
+answered; replay that response from a second cache and `Age` still reads what it
+read then, so a banner saying "2 minutes old" is shown against data that may be
+an hour old. The staleness reporting is the feature, and a client cache silently
+falsifies it. This is the same objection recorded against gateway caching under
+"Caching strategy", and it applies with more force here, because the browser is
+where the claim is finally rendered to a person.
+
+It would also buy very little. The lists are server components, so the browser
+issues no data request to cache — confirmed by watching the network panel during
+a full page interaction: zero requests reach the BFF from client code. Adding a
+client cache therefore means first moving fetching into the browser, which ships
+data-fetching logic, a second serialisation of the resilience contract, and the
+`X-Cache`/`Age` interpretation to every consumer. That is a larger change that
+makes the system harder to reason about, in exchange for caching a hop between
+two processes that are already adjacent.
+
+TanStack Query earns its keep on a client-fetching application: deduplication,
+background refetch, optimistic updates with invalidation on mutation. This has
+one mutation, it is a server action, and `revalidatePath` already invalidates
+exactly what it should. The library would be carried for features that are not
+used.
+
+Where a frontend cache would be right, and what it would look like: if repeat
+page loads became a measured cost, the Next fetch cache with a short `revalidate`
+on the parcs list only. Parcs are bounded reference data that tolerate being
+seconds old — which is the same freshness-by-tolerance rule the BFF already
+applies to enrichment lookups, applied one layer out. Bookings and users would
+stay uncached at that layer for the reason in the table above: a
+thirty-second-old booking list is how a system double-books.
+
 **The cache is a safety net, not a read path.** Every request attempts to reach
 upstream; the cache answers only when that attempt fails, returning the last
 known good payload with `X-Cache: stale` and an `Age` header so the interface
