@@ -14,7 +14,11 @@ const PREFIX = '/api/1';
 
 const config: UpstreamConfig = {
   baseUrl: `${HOST}${PREFIX}`,
-  timeoutMs: 50,
+  // Generous on purpose. Every other test here answers immediately, so this
+  // never fires — and a tight value would turn a busy CI worker into a
+  // "retries did not work" failure. The timeout itself is proven below with a
+  // client configured for it.
+  timeoutMs: 2_000,
   retries: 2,
   retryDelayMs: 1,
   breaker: {
@@ -28,6 +32,14 @@ const config: UpstreamConfig = {
 /** Counts what actually left the process, which is the thing under test. */
 let attempts = 0;
 
+/**
+ * Counted when the request is intercepted rather than when the reply is
+ * generated: an attempt the client times out never reaches the reply callback,
+ * but it did leave the process, and under load that difference is the
+ * difference between a stable test and a flaky one.
+ */
+const counting = (scope: nock.Scope): nock.Scope => scope.on('request', () => (attempts += 1));
+
 const registries: BreakerRegistry[] = [];
 
 const registry = () => {
@@ -38,10 +50,6 @@ const registry = () => {
 };
 
 const build = () => new UpstreamClient(createUpstreamHttp(config), registry());
-
-const onEveryRequest = () => {
-  attempts += 1;
-};
 
 beforeAll(() => {
   nock.disableNetConnect();
@@ -63,43 +71,31 @@ afterAll(() => {
 
 describe('reads', () => {
   it('absorbs ordinary flake by retrying', async () => {
-    nock(HOST)
-      .get(`${PREFIX}/users`)
-      .times(2)
-      .reply(() => {
-        onEveryRequest();
-
-        return [502];
-      })
-      .get(`${PREFIX}/users`)
-      .reply(() => {
-        onEveryRequest();
-
-        return [200, { data: [] }];
-      });
+    counting(
+      nock(HOST)
+        .get(`${PREFIX}/users`)
+        .times(2)
+        .reply(502)
+        .get(`${PREFIX}/users`)
+        .reply(200, { data: [] }),
+    );
 
     await expect(build().get('GET /users', '/users')).resolves.toEqual({ data: [] });
     expect(attempts).toBe(3);
   });
 
   it('makes exactly the configured number of attempts before giving up', async () => {
-    nock(HOST)
-      .persist()
-      .get(`${PREFIX}/users`)
-      .reply(() => {
-        onEveryRequest();
-
-        return [502];
-      });
+    counting(nock(HOST).persist().get(`${PREFIX}/users`).reply(502));
 
     await expect(build().get('GET /users', '/users')).rejects.toBeInstanceOf(UpstreamFailureError);
     expect(attempts).toBe(config.retries + 1);
   });
 
   it('gives up on an attempt that never answers, rather than hanging', async () => {
-    nock(HOST).persist().get(`${PREFIX}/users`).delayConnection(500).reply(200, { data: [] });
+    const impatient = { ...config, timeoutMs: 50 };
+    nock(HOST).persist().get(`${PREFIX}/users`).delayConnection(5_000).reply(200, { data: [] });
 
-    const error = await build()
+    const error = await new UpstreamClient(createUpstreamHttp(impatient), registry())
       .get('GET /users', '/users')
       .catch((thrown: unknown) => thrown);
 
@@ -112,14 +108,7 @@ describe('reads', () => {
 
 describe('the circuit breaker', () => {
   const failEvery = (path: string, status = 502) =>
-    nock(HOST)
-      .persist()
-      .get(`${PREFIX}${path}`)
-      .reply(() => {
-        onEveryRequest();
-
-        return [status];
-      });
+    counting(nock(HOST).persist().get(`${PREFIX}${path}`).reply(status));
 
   it('opens under sustained failure and then stops calling upstream at all', async () => {
     failEvery('/users');
@@ -168,14 +157,12 @@ describe('the circuit breaker', () => {
 
 describe('a retry the user pressed', () => {
   const failUntil = (recovers: () => boolean) =>
-    nock(HOST)
-      .persist()
-      .get(`${PREFIX}/users`)
-      .reply(() => {
-        onEveryRequest();
-
-        return recovers() ? [200, { data: [] }] : [502];
-      });
+    counting(
+      nock(HOST)
+        .persist()
+        .get(`${PREFIX}/users`)
+        .reply(() => (recovers() ? [200, { data: [] }] : [502])),
+    );
 
   const openTheBreaker = async (client: UpstreamClient) => {
     for (let cycle = 0; cycle < config.breaker.volumeThreshold; cycle += 1) {
@@ -246,14 +233,7 @@ describe('a retry the user pressed', () => {
 
 describe('writes', () => {
   it('are never retried, because a failed write may still have committed', async () => {
-    nock(HOST)
-      .persist()
-      .post(`${PREFIX}/users`)
-      .reply(() => {
-        onEveryRequest();
-
-        return [502];
-      });
+    counting(nock(HOST).persist().post(`${PREFIX}/users`).reply(502));
 
     await expect(
       build().post('POST /users', '/users', { name: 'Ada', email: 'ada@example.com' }),
@@ -262,14 +242,7 @@ describe('writes', () => {
   });
 
   it('bypass the breaker, so an open read breaker does not block them', async () => {
-    nock(HOST)
-      .persist()
-      .get(`${PREFIX}/users`)
-      .reply(() => {
-        onEveryRequest();
-
-        return [502];
-      });
+    counting(nock(HOST).persist().get(`${PREFIX}/users`).reply(502));
     nock(HOST).persist().post(`${PREFIX}/users`).reply(201, { id: 'u1' });
     const client = build();
 

@@ -70,38 +70,46 @@ supplied Nx workspace.
 ```mermaid
 flowchart TB
     subgraph controllers["Controllers"]
+        pc["ParcsController"]
         uc["UsersController"]
         bc["BookingsController"]
         hc["HealthController"]
     end
 
     subgraph services["Application services"]
-        us["UserService<br/>pre-check, write, reconcile"]
-        bs["BookingService<br/>enrichment composition"]
+        ps["ParcsService"]
+        us["UsersService<br/>pre-check, write, reconcile"]
+        bs["BookingsService<br/>enrichment composition"]
+        validate["validate.ts<br/>class-validator DTOs<br/>drop-and-count or fail"]
     end
 
-    subgraph http["ResilientHttpClient"]
-        breaker["BreakerRegistry<br/>opossum, keyed by route template"]
+    subgraph client["UpstreamClient"]
+        breaker["BreakerRegistry<br/>opossum, keyed by route template<br/>rate-limited forced probes"]
         retry["axios-retry<br/>retries: 2, jittered backoff"]
         axios["axios instance<br/>2s per-attempt timeout"]
-        validate["ResponseValidator<br/>class-validator DTOs"]
     end
 
-    cache[("CacheService<br/>1h storage, 30s freshness")]
+    net["SafetyNet<br/>attempt upstream, fall back on failure"]
+    cache[("Redis via Keyv<br/>24h retention, 250ms deadline")]
     upstream["Supplied API"]
 
+    pc --> ps
     uc --> us
     bc --> bs
     hc --> breaker
-    us -->|"uncached reads only"| http
-    bs --> http
-    bs --> cache
-    http <--> cache
+    hc --> net
+    ps --> net
+    bs --> net
+    bs -->|"name lookups"| us
+    bs -->|"name lookups"| ps
+    us -->|"list, findOne"| net
+    us -->|"pre-check, write, reconcile<br/>cache bypassed"| client
+    net -->|"fetch fresh"| client
+    net <--> cache
+    client --> validate
     breaker --> retry
     retry --> axios
     axios --> upstream
-    upstream -.->|"response"| validate
-    validate -.-> breaker
 ```
 
 The nesting order is load-bearing. Because `axios-retry` operates inside the
@@ -109,8 +117,13 @@ axios instance, the breaker's action function settles once per exhausted retry
 cycle rather than once per attempt. A breaker counting individual attempts
 would trip after two requests against a 10%-flaky endpoint and stay open.
 
-`UserService` bypasses the cache entirely, because its reads establish ground
-truth about a write rather than display data.
+The write path in `UsersService` goes around `SafetyNet` rather than through
+it. Its reads establish ground truth about a write, and a cached list from
+before that write would report a failure for a write that succeeded.
+
+Validation sits in the services rather than in the client, because how a bad
+payload should degrade depends on what was asked for: a malformed row in a
+list costs that row, a malformed single resource is a 502.
 
 ## Read path
 
@@ -121,7 +134,10 @@ flowchart TB
     kind -->|"yes"| hit["200, X-Cache: hit<br/>upstream not called"]
     kind -->|"no, or a primary read"| bopen{"Breaker open<br/>for this route?"}
 
-    bopen -->|"yes"| fb1{"Cached payload<br/>exists?"}
+    bopen -->|"yes"| forced{"retry=true from a person,<br/>outside the probe window?"}
+
+    forced -->|"yes"| probe["One probe sent<br/>success closes the breaker"]
+    forced -->|"no"| fb1{"Cached payload<br/>exists?"}
     fb1 -->|"yes"| stale["200<br/>X-Cache: stale, Age"]
     fb1 -->|"no"| s503["503<br/>Retry-After"]
 
@@ -139,7 +155,10 @@ flowchart TB
     valid -->|"nothing usable"| nostore["Cache left untouched<br/>502"]
 ```
 
-Primary reads always attempt upstream; the cache answers only on failure. Only
+Primary reads always attempt upstream; the cache answers only on failure. An
+open breaker refuses automatic traffic but not a person: a request carrying
+`retry=true` is allowed through once per probe window, and a successful probe
+closes the breaker rather than waiting out its reset timeout. Only
 enrichment lookups carry a freshness window, and only validated payloads are
 written, so a bad response cannot poison the fallback. A 4xx never falls back
 to cache — the resource is gone, and serving a cached copy would resurrect it.

@@ -44,6 +44,12 @@ consult the cache only when that attempt fails.
 - Entry age grows only while upstream is failing, so the `Age` header emitted
   with a stale response is an outage clock, and is exposed alongside breaker
   state on the health endpoint.
+- A store that is unreachable neither answers nor fails: it queues commands
+  while it reconnects, so the write never settles and the request hangs on work
+  that was supposed to be optional. The client therefore disables the offline
+  queue and every cache operation runs under a 250ms deadline, which also
+  covers a store that is connected but slow. A cache allowed to be missing must
+  never be allowed to be slow.
 - Only validated payloads are written. A response failing validation leaves the
   previous entry untouched, or one bad response would poison the safety net for
   the duration of the outage.

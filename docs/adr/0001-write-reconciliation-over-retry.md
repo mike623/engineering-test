@@ -30,7 +30,10 @@ duplicate user on roughly seven of every ten requests.
 
 ## Consequences
 
-- Writes resolve to **three** outcomes, not two. Confirmed-created returns
+- Writes resolve to **three** outcomes, not two, and the request as a whole to
+  five: an address already taken and a pre-check that could not run are both
+  refusals *before* anything is written, and are reported separately from the
+  three below so the caller knows nothing was attempted. Confirmed-created returns
   success. Confirmed-absent returns a genuine 502 and is not retried. If the
   reconciliation read itself fails after its own retries, the outcome is
   **unknown** and is surfaced as unknown — never coerced into either.
