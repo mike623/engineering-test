@@ -99,6 +99,11 @@ nav a {
   cursor: pointer;
 }
 
+.form__buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .form .notice {
   margin: 0;
 }

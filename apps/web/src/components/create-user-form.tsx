@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import type { CreateUserResult } from '@/lib/bff';
 
 /**
@@ -27,26 +27,53 @@ function Outcome({ result }: { result: CreateUserResult }) {
   );
 }
 
+/**
+ * Enough entropy to keep repeated clicks out of the 409 path, generated on
+ * click rather than on render so the server and client markup still agree.
+ */
+function randomUser() {
+  const suffix = crypto.randomUUID().slice(0, 8);
+
+  return { name: `Test User ${suffix}`, email: `test-${suffix}@example.com` };
+}
+
 export function CreateUserForm({
   action,
 }: {
   action: (previous: CreateUserResult | null, formData: FormData) => Promise<CreateUserResult>;
 }) {
   const [result, submit, pending] = useActionState(action, null);
+  const [draft, setDraft] = useState({ name: '', email: '' });
 
   return (
     <form action={submit} className="form">
       <label>
         Name
-        <input name="name" required />
+        <input
+          name="name"
+          required
+          value={draft.name}
+          onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+        />
       </label>
       <label>
         Email
-        <input name="email" type="email" required />
+        <input
+          name="email"
+          type="email"
+          required
+          value={draft.email}
+          onChange={(event) => setDraft({ ...draft, email: event.target.value })}
+        />
       </label>
-      <button type="submit" disabled={pending}>
-        {pending ? 'Creating…' : 'Create user'}
-      </button>
+      <div className="form__buttons">
+        <button type="button" onClick={() => setDraft(randomUser())}>
+          Fill random
+        </button>
+        <button type="submit" disabled={pending}>
+          {pending ? 'Creating…' : 'Create user'}
+        </button>
+      </div>
       {result ? <Outcome result={result} /> : null}
     </form>
   );

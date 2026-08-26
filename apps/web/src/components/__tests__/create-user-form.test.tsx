@@ -46,3 +46,20 @@ describe('creating a user', () => {
     expect(status).toHaveTextContent('already registered');
   });
 });
+
+describe('filling the form for a test create', () => {
+  it('fills both fields with a fresh address each click', async () => {
+    render(<CreateUserForm action={jest.fn()} />);
+
+    const email = () => screen.getByLabelText('Email') as HTMLInputElement;
+    await userEvent.click(screen.getByRole('button', { name: 'Fill random' }));
+    const first = email().value;
+
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toMatch(/^Test User [0-9a-f]{8}$/);
+    expect(first).toMatch(/^test-[0-9a-f]{8}@example\.com$/);
+
+    // A repeated address would land in the 409 path rather than creating.
+    await userEvent.click(screen.getByRole('button', { name: 'Fill random' }));
+    expect(email().value).not.toBe(first);
+  });
+});
