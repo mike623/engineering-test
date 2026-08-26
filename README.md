@@ -32,20 +32,13 @@ docker compose -f docker-compose.yml -f docker-compose.apps.yml exec eurocamp-ap
 ```
 
 Merging both files puts all five services on one network, so they reach each
-other by name. The supplied `docker-compose.yml` is unchanged; the second file
-adds Redis, the BFF and the web application. Then open http://localhost:3000.
+other by name. Then open http://localhost:3000.
 
-> **On Apple Silicon, the supplied API image does not build.** `npm ci` reaches
-> `@parcel/watcher@2.0.4`, which has no arm64 prebuild, and the slim base image
-> has no compiler for the fallback build (finding 8 in NOTES.md). Build that one
-> image under emulation instead:
->
-> ```bash
-> DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose -f docker-compose.yml build eurocamp-api
-> ```
->
-> then run the `up` command above. The two new applications build natively
-> either way.
+The supplied `docker-compose.yml` and `Dockerfile.dev` are unchanged. The
+second file adds Redis, the BFF and the web application, and builds the
+supplied API from `docker/eurocamp-api.Dockerfile` — its own Dockerfile does
+not build on Apple Silicon at all, and that copy adds the three packages it
+is missing. Finding 8 in NOTES.md has the detail.
 
 ### Applications on the host
 

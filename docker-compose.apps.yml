@@ -6,6 +6,15 @@
 #
 #   docker compose -f docker-compose.yml -f docker-compose.apps.yml up --build
 services:
+  # The supplied API, built from a Dockerfile that adds the three packages its
+  # own is missing. Without them `npm ci` cannot build @parcel/watcher from
+  # source and the image does not build at all on Apple Silicon (finding 8 in
+  # NOTES.md). Everything else about the service is inherited unchanged, and
+  # both supplied files stay as delivered.
+  eurocamp-api:
+    build:
+      dockerfile: ./docker/eurocamp-api.Dockerfile
+
   bff-redis:
     image: redis:7-alpine
     restart: unless-stopped

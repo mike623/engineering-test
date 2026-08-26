@@ -161,10 +161,14 @@ npm error gyp ERR! find Python
 
 Step 1 of the original instructions therefore fails outright on any M-series
 Mac, before a candidate reaches the exercise at all. It presumably builds on
-the x64 machines it was written on. Two workarounds, both confirmed to work
-here: build the image for `linux/amd64` under emulation, or add the three
-build tools to the image. The supplied file is left as delivered either way —
-the README records the workaround rather than patching around it.
+the x64 machines it was written on.
+
+`docker/eurocamp-api.Dockerfile` is that file with `python3`, `make` and `g++`
+added, and `docker-compose.apps.yml` points the service at it, so the documented
+command works on either architecture. The supplied file stays as delivered.
+Pinning `platform: linux/amd64` to build the original under emulation is the
+other obvious fix, and it does not work: podman ignores the platform and builds
+for the host anyway, failing identically.
 
 ## Database review (Task 1)
 
