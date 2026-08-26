@@ -33,13 +33,13 @@ flowchart TB
 
     subgraph web["apps/web — Next 16, TypeScript 5"]
         rsc["Server Components<br/>list pages, first paint"]
-        island["Client islands<br/>TanStack Query,<br/>retry control, stale banner"]
+        island["Client islands<br/>retry control,<br/>create-user form"]
         eb["Error boundary"]
     end
 
     subgraph bff["apps/bff — Nest 11, TypeScript 5"]
         ctrl["REST controllers<br/>resource body,<br/>metadata in headers"]
-        resil["ResilientHttpClient"]
+        resil["UpstreamClient"]
         cache[("Cache store<br/>payload + cachedAt")]
         health["GET /health/breakers"]
     end

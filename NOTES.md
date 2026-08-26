@@ -7,7 +7,7 @@ the frontend can live, so it is recorded here rather than worked around silently
 
 | Package | Pinned here | Needed by the frontend |
 | --- | --- | --- |
-| TypeScript | `~4.8.2` | `5.x` (TanStack Query v5, Next 15 types) |
+| TypeScript | `~4.8.2` | `5.x` (Next 16 and React 19 types) |
 | Nx | `15.7.2` | `@nrwl/next` at this version caps Next at 13 |
 | NestJS | `^9.0.0` | — |
 | Jest | `28.1.1` | 29+ for modern RTL |
@@ -16,8 +16,8 @@ the frontend can live, so it is recorded here rather than worked around silently
 Consequences:
 
 - `@nrwl/next@15.7.2` would pin the frontend to Next 13 and React 18. The App
-  Router, React Server Components and TanStack Query v5 all assume newer
-  versions than this workspace can resolve.
+  Router, React Server Components and Server Actions all assume newer versions
+  than this workspace can resolve.
 - `tsconfig.base.json` targets `es2015` with `module: esnext` and
   `experimentalDecorators`, tuned for Nest. Extending it from a Next app would
   drag decorator metadata and an ES2015 target into the frontend build.
@@ -213,6 +213,18 @@ would create one breaker per id, each with a sample size of one, none ever
 reaching `volumeThreshold`. Writes bypass the registry entirely: an open
 breaker on a write means we stop calling an endpoint that is succeeding 30% of
 the time, and reconciliation (ADR 0001) already covers that failure mode.
+
+**Server rendering, with no client data-fetching library.** Lists are rendered
+in server components with `cache: 'no-store'`, and the only client components
+are the two that need client state: the retry control, which has to know
+whether a request is in flight, and the create-user form, which has to show
+which of the five write outcomes happened. TanStack Query would be earning its
+keep if the browser were fetching — caching, deduplication, background
+refetching — but here the BFF already owns every one of those concerns, and
+duplicating them in the browser would put a second, quieter cache in front of a
+cache whose entire purpose is to report honestly how stale it is. The Next
+fetch cache is switched off for the same reason. What the frontend keeps is the
+part it cannot delegate: making the degraded states legible.
 
 **The cache is a safety net, not a read path.** Every request attempts to reach
 upstream; the cache answers only when that attempt fails, returning the last
