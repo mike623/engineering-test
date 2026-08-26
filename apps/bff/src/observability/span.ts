@@ -25,6 +25,7 @@ export async function withSpan<T>(
       // show up as failed in a trace list.
       span.recordException(error as Error);
       span.setAttribute('error.type', (error as Error).constructor.name);
+      span.setAttributes(causeAttributes(error));
       span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error).message });
 
       throw error;
@@ -32,6 +33,35 @@ export async function withSpan<T>(
       span.end();
     }
   });
+}
+
+/**
+ * Our upstream errors deliberately say the same thing however they failed —
+ * `Upstream call to GET /users failed` — because the caller does not act on
+ * the difference. Whoever is reading the trace does: an unresolvable host, a
+ * refused connection, a timeout and an injected 502 are four different
+ * problems, and without this they are one indistinguishable failure.
+ */
+function causeAttributes(error: unknown): Attributes {
+  const cause = (error as { cause?: unknown })?.cause;
+
+  if (!cause) {
+    return {};
+  }
+
+  const { code, message, response } = cause as {
+    code?: string;
+    message?: string;
+    response?: { status?: number };
+  };
+
+  return {
+    // `ENOTFOUND` is DNS, `ECONNREFUSED` is nothing listening, `ECONNABORTED`
+    // is our own timeout, and a status is upstream answering badly.
+    ...(code ? { 'error.cause_code': code } : {}),
+    ...(response?.status ? { 'upstream.status_code': response.status } : {}),
+    ...(message ? { 'error.cause': message } : {}),
+  };
 }
 
 /**

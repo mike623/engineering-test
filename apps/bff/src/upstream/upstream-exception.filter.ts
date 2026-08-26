@@ -56,7 +56,15 @@ export class UpstreamExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    this.logger.error(`Upstream call failed: ${error.message}`, (error as UpstreamFailureError).cause);
+    // The cause, not just that there was one: the log is the other half of
+    // the trace and reads the same way.
+    const cause = (error as UpstreamFailureError).cause as { code?: string; message?: string };
+
+    this.logger.error(
+      `Upstream call failed: ${error.message}${cause?.code ? ` (${cause.code})` : ''}${
+        cause?.message ? ` — ${cause.message}` : ''
+      }`,
+    );
     response.status(502).json({ statusCode: 502, message: 'Upstream request failed' });
   }
 }

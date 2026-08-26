@@ -48,6 +48,16 @@ the upstream client, the safety net, and the create path.
   Logs and traces were otherwise two accounts of the same outage that could
   not be joined: under concurrent traffic, "recovered a write" is true of some
   request and nothing said which.
+- The failure *cause* is copied onto our span as `error.cause_code`,
+  `error.cause` and, where upstream answered, `upstream.status_code`. Our
+  errors say the same thing however they failed — `Upstream call to GET /users
+  failed` — because the caller does not act on the difference, but whoever
+  reads the trace does: an unresolvable host, a refused connection, our own
+  timeout and an injected 502 are four different problems. The auto-
+  instrumented child span always held this, so the information was not lost;
+  it was one drill-down away and could not be filtered next to
+  `upstream.route`. The exception filter logs the same cause for the same
+  reason.
 - `error.type` is the class name rather than a message, so it groups. A trace
   search for `BreakerOpenError` answers "how much traffic did we refuse during
   that outage", which no HTTP status can.

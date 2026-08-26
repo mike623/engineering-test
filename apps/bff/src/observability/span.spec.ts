@@ -60,4 +60,46 @@ describe('spans around the interesting failures', () => {
     expect(span.attributes['cache.state']).toBe('stale');
     expect(span.attributes['cache.age_ms']).toBe(1200);
   });
+
+  it('records what actually failed, not only that our wrapper caught it', async () => {
+    class UpstreamFailureError extends Error {
+      constructor(readonly cause: unknown) {
+        super('Upstream call to GET /users failed');
+      }
+    }
+
+    await expect(
+      withSpan('upstream GET /users', {}, async () => {
+        throw new UpstreamFailureError(
+          Object.assign(new Error('getaddrinfo ENOTFOUND eurocamp-api'), { code: 'ENOTFOUND' }),
+        );
+      }),
+    ).rejects.toThrow();
+
+    const [span] = exporter.getFinishedSpans();
+
+    // Every upstream failure carries the same message by design. A trace that
+    // cannot separate DNS from a refused connection from a timeout leaves the
+    // reader to guess which outage they are looking at.
+    expect(span.attributes['error.cause_code']).toBe('ENOTFOUND');
+    expect(span.attributes['error.cause']).toBe('getaddrinfo ENOTFOUND eurocamp-api');
+  });
+
+  it('records the upstream status when it answered badly rather than not at all', async () => {
+    class UpstreamFailureError extends Error {
+      constructor(readonly cause: unknown) {
+        super('Upstream call to POST /users failed');
+      }
+    }
+
+    await expect(
+      withSpan('upstream POST /users', {}, async () => {
+        throw new UpstreamFailureError({ message: 'Request failed', response: { status: 502 } });
+      }),
+    ).rejects.toThrow();
+
+    const [span] = exporter.getFinishedSpans();
+
+    expect(span.attributes['upstream.status_code']).toBe(502);
+  });
 });

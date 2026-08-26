@@ -613,6 +613,23 @@ what an open breaker refused, and `cache_state = 'stale'` counts reads served
 during an outage that returned 200 and are otherwise indistinguishable from
 healthy ones.
 
+Our upstream errors deliberately carry one message whatever went wrong, since
+the caller does not act on the difference. A reader does, so the cause is
+copied onto the span as `error_cause_code` and `error_cause`:
+
+```
+upstream GET /parcs   error_type=UpstreamFailureError
+                      error_cause_code=ECONNABORTED
+                      error_cause=timeout of 2000ms exceeded
+```
+
+`ENOTFOUND` is DNS, `ECONNREFUSED` is nothing listening, `ECONNABORTED` is our
+own timeout, and `upstream_status_code` means it answered badly rather than
+not at all. None of those is the injected flakiness, which arrives as a 502 or
+a 500 from a host that resolved and answered — worth being able to tell apart
+when the question is whether an outage is the exercise misbehaving or the
+environment.
+
 Finding that trace requires being handed its id, so every response carries
 `X-Trace-Id` — set by middleware before routing, which is what puts it on the
 failures as well as the successes. The same id is appended to every log line
