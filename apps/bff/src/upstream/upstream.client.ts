@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AxiosInstance, isAxiosError } from 'axios';
+import { withSpan } from '../observability/span';
 import { BreakerRegistry } from './breaker.registry';
 import {
   BreakerOpenError,
@@ -25,13 +26,17 @@ export class UpstreamClient {
    *   breaker, so it must not carry a resolved id.
    */
   async get<T>(route: string, path: string, { force = false } = {}): Promise<T> {
-    try {
-      const response = await this.breakers.fire(route, () => this.http.get<T>(path), { force });
+    // The span is keyed on the route template, matching the breaker, so every
+    // call to `/users/:id` lands under one name instead of one per id.
+    return withSpan('upstream ' + route, { 'upstream.route': route, 'upstream.forced_probe': force }, async () => {
+      try {
+        const response = await this.breakers.fire(route, () => this.http.get<T>(path), { force });
 
-      return response.data;
-    } catch (error) {
-      throw this.translate(route, error);
-    }
+        return response.data;
+      } catch (error) {
+        throw this.translate(route, error);
+      }
+    });
   }
 
   /**
@@ -41,13 +46,15 @@ export class UpstreamClient {
    * condition excludes non-idempotent methods, so this is not retried either.
    */
   async post<T>(route: string, path: string, body: unknown): Promise<T> {
-    try {
-      const response = await this.http.post<T>(path, body);
+    return withSpan('upstream ' + route, { 'upstream.route': route }, async () => {
+      try {
+        const response = await this.http.post<T>(path, body);
 
-      return response.data;
-    } catch (error) {
-      throw this.translate(route, error);
-    }
+        return response.data;
+      } catch (error) {
+        throw this.translate(route, error);
+      }
+    });
   }
 
   private translate(route: string, error: unknown): Error {

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ENRICHMENT_FRESHNESS_MS } from '../cache/freshness';
+import { withSpan } from '../observability/span';
 import { Served, SafetyNet } from '../cache/safety-net';
 import { UpstreamClient } from '../upstream/upstream.client';
 import { validateList, validateOne, ValidatedList } from '../validation/validate';
@@ -58,6 +59,22 @@ export class UsersService {
    * See ADR 0001.
    */
   async create(payload: CreateUserDto): Promise<WriteOutcome> {
+    // The outcome is the thing worth tracing. A recovered write looks like a
+    // clean 201 on the wire and a 502 in the upstream span; without this
+    // attribute the trace shows a failure that somehow succeeded.
+    return withSpan('create user', {}, async (annotate) => {
+      const outcome = await this.attemptCreate(payload);
+
+      annotate({
+        'write.outcome': outcome.status,
+        ...(outcome.status === 'created' ? { 'write.recovered': outcome.recovered } : {}),
+      });
+
+      return outcome;
+    });
+  }
+
+  private async attemptCreate(payload: CreateUserDto): Promise<WriteOutcome> {
     const before = await this.listFromUpstream().catch((error: Error) => {
       // Nothing has been written, so failing closed is safe and honest. It is
       // also the better bet: a read failing now means the reconciliation read

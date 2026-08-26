@@ -28,6 +28,24 @@ services:
       timeout: 3s
       retries: 10
 
+  # Traces. Single binary, no collector in front of it — one more hop to run
+  # and configure buys nothing at this size, and the SDK batches anyway.
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    restart: unless-stopped
+    environment:
+      - ZO_ROOT_USER_EMAIL=root@example.com
+      - ZO_ROOT_USER_PASSWORD=Complexpass#123
+    ports:
+      - 5080:5080
+    # No volume: traces from a local run are worth less than the disk, and a
+    # fresh store per run makes "what did that request do" easier to answer.
+    healthcheck:
+      test: ['CMD', '/openobserve', '--help']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   bff:
     build:
       context: ./apps/bff
@@ -37,12 +55,18 @@ services:
       # supplied compose file publishes to the host.
       - UPSTREAM_BASE_URL=http://eurocamp-api:8080/api/1
       - REDIS_URL=redis://bff-redis:6379
+      # Traces are off entirely when this is unset, which is how the BFF runs
+      # outside compose. `default` is the OpenObserve organisation.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://openobserve:5080/api/default
+      - OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic cm9vdEBleGFtcGxlLmNvbTpDb21wbGV4cGFzcyMxMjM=
     ports:
       - 3002:3002
     depends_on:
       bff-redis:
         condition: service_healthy
       eurocamp-api:
+        condition: service_started
+      openobserve:
         condition: service_started
     healthcheck:
       # node:22-slim carries no curl, and Node has fetch built in.

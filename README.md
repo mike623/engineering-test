@@ -84,9 +84,31 @@ npm run dev
 
 Then open http://localhost:3000.
 
+### Traces
+
+The compose stack includes OpenObserve, and the BFF exports OTLP spans to it.
+Open http://localhost:5080 and sign in with `root@example.com` /
+`Complexpass#123` — development credentials, in the compose file in plain
+sight on purpose.
+
+Traces answer the questions the status codes cannot. Search the `default`
+traces stream for:
+
+- `write_recovered = 'true'` — writes upstream reported as failed that had
+  actually committed. The span tree shows the 502 from `upstream POST /users`
+  inside a `create user` span that returned 201.
+- `error_type = 'BreakerOpenError'` — requests refused without reaching the
+  network, which no HTTP status distinguishes from a request that failed.
+- `cache_state = 'stale'` — reads answered from the safety net during an
+  outage. These returned 200, so nothing else marks them.
+
+Tracing is off when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, which is how the
+BFF runs outside compose. See ADR 0003.
+
 ### Ports
 
-`3000` web, `3001` supplied API, `3002` BFF, `5433` Postgres, `6379` Redis. The
+`3000` web, `3001` supplied API, `3002` BFF, `5080` OpenObserve, `5433`
+Postgres, `6379` Redis. The
 supplied compose file publishes 5433 and 3001; if either is already taken on
 your machine, that bind fails before anything else runs.
 

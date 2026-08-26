@@ -586,6 +586,36 @@ endpoints actually called, that leaves a residual failure probability near
 1e-3, and serving stale makes even that case benign. Four attempts would reach
 1e-4 at the cost of a 14s spinner, which is the wrong trade for a page load.
 
+## Tracing
+
+Every failure worth investigating here is one where the status code misleads.
+Upstream reports a committed write as a 502; a read it refused is answered
+from the cache with a 200; a request refused by an open breaker never reaches
+the network. Automatic instrumentation records all three wrongly, so the BFF
+adds spans and attributes at the seams that own the meaning. ADR 0003 has the
+reasoning; what it buys is best shown by one trace of a single create:
+
+```
+POST /users                          201
+  create user                        write.outcome=created  write.recovered=true
+    upstream GET /users              200   (pre-check)
+    upstream POST /users     ERROR   502   error.type=UpstreamFailureError
+    upstream GET /users              200   (reconciliation)
+```
+
+The caller got a 201. Upstream said 502. Both are true, and the trace is where
+that stops being a contradiction. Across the run that produced it, the store
+held five `write.recovered=true` spans against one ordinary create — the 70%
+failure rate, visible rather than inferred.
+
+The same store answers the other two: `error_type = 'BreakerOpenError'` counts
+what an open breaker refused, and `cache_state = 'stale'` counts reads served
+during an outage that returned 200 and are otherwise indistinguishable from
+healthy ones.
+
+The frontend is not instrumented, so a trace starts at the BFF rather than at
+the page render.
+
 ## How this was delivered
 
 Nine slices, each one a complete path through every layer rather than a layer

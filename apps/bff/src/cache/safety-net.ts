@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
+import { annotateSpan } from '../observability/span';
 import { UpstreamClientError, UpstreamContractError } from '../upstream/upstream.errors';
 import { CacheState } from '../http/response-metadata';
 
@@ -74,6 +75,8 @@ export class SafetyNet {
       const ageMs = entry ? Date.now() - entry.cachedAt : Infinity;
 
       if (entry && ageMs < freshnessMs) {
+        annotateSpan({ 'cache.key': key, 'cache.state': 'hit', 'cache.age_ms': ageMs });
+
         return { value: entry.value, state: 'hit', ageMs };
       }
     }
@@ -84,6 +87,8 @@ export class SafetyNet {
       // Write-through on every success, so the entry's age is an outage clock:
       // it only grows while upstream is failing.
       await this.remember(key, value);
+
+      annotateSpan({ 'cache.key': key, 'cache.state': 'miss', 'cache.age_ms': 0 });
 
       return { value, state: 'miss', ageMs: 0 };
     } catch (error) {
@@ -97,9 +102,14 @@ export class SafetyNet {
         throw error;
       }
 
-      this.logger.warn(`Serving ${key} from cache, ${Date.now() - entry.cachedAt}ms old`);
+      const ageMs = Date.now() - entry.cachedAt;
 
-      return { value: entry.value, state: 'stale', ageMs: Date.now() - entry.cachedAt };
+      this.logger.warn(`Serving ${key} from cache, ${ageMs}ms old`);
+      // The request succeeded from the caller's side, so nothing else in the
+      // trace would record that upstream was down for it.
+      annotateSpan({ 'cache.key': key, 'cache.state': 'stale', 'cache.age_ms': ageMs });
+
+      return { value: entry.value, state: 'stale', ageMs };
     }
   }
 
