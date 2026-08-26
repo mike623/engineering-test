@@ -1,0 +1,47 @@
+# Overlay for a host that is reachable from the internet.
+#
+#   docker compose --env-file .env.deploy \
+#                  -f docker-compose.yml \
+#                  -f docker-compose.apps.yml \
+#                  -f docker-compose.deploy.yml up -d
+#
+# The other two files publish every port on 0.0.0.0, which is right on a laptop
+# and wrong on a public address: this repository is public, so the database,
+# Redis and the key browser would be readable by anyone who cloned it. Only the
+# web application and the trace UI face outwards here; the rest bind to the
+# loopback address, reachable over an SSH tunnel.
+#
+# `!override` matters — compose appends port lists across files, so without it
+# each service would keep its 0.0.0.0 binding and gain a second one.
+#
+# OpenObserve is published, so its credentials cannot be the ones committed in
+# docker-compose.apps.yml. .env.deploy supplies them and is not in the
+# repository; OPENOBSERVE_BASIC_AUTH must be the base64 of email:password.
+services:
+  eurocamp-db:
+    ports: !override
+      - 127.0.0.1:5433:5432
+
+  eurocamp-api:
+    ports: !override
+      - 127.0.0.1:3001:8080
+
+  bff-redis:
+    ports: !override
+      - 127.0.0.1:6379:6379
+
+  redis-insight:
+    ports: !override
+      - 127.0.0.1:5540:5540
+
+  bff:
+    ports: !override
+      - 127.0.0.1:3002:3002
+
+  openobserve:
+    ports: !override
+      - 5080:5080
+
+  web:
+    ports: !override
+      - 3000:3000
