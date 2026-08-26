@@ -500,6 +500,15 @@ The pre-check does not close the time-of-check/time-of-use window — two
 concurrent creates of the same address both observe a clean pre-state and both
 proceed. No client-side approach closes it. The fix is a unique index upstream.
 
+Two alternatives to this whole path were put to us and rejected; ADR 0001 has
+the reasoning under "Why the response stays synchronous". Deferring the write
+behind a queue and answering `202` takes the outcome out of the response, which
+for account creation means the caller cannot proceed and finds out somewhere
+they are not looking. Failing fast on the 502 is worse than it sounds: against
+this upstream the failure is usually a lie, so the caller is told a user was
+not created when it was, retries, and creates the duplicate. Both assume the
+status code can be believed, which is the one thing it cannot be.
+
 ### When the pre-check itself fails
 
 The pre-check reads the same 10%-flaky endpoint as everything else and can fail

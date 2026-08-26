@@ -19,14 +19,50 @@ duplicate user on roughly seven of every ten requests.
 
 - **Retry with backoff.** The obvious default, and actively destructive here:
   every retry of an apparently-failed write creates another user.
-- **Client-supplied idempotency key.** Not available. Upstream ignores the
-  header and generates the primary key itself.
+- **Client-supplied idempotency key.** Not available today. Upstream ignores
+  the header and generates the primary key itself, so there is nothing we can
+  send that would make the retry above safe.
 - **Reconcile after failure.** Chosen. One write attempt, then a read to
   determine what actually happened.
-- **Outbox with an async worker.** The correct answer at this failure rate, and
-  rejected only because it requires changing the supplied API, which is out of
-  scope. Recorded as the recommendation under "what we would change with more
-  time".
+- **Idempotency key honoured upstream, plus a unique index on `users.email`.**
+  The actual fix, and the one recorded under "what we would change with more
+  time" — the same header as above, but with the upstream changes that give it
+  meaning. It makes a retry safe without changing the shape of the interaction:
+  the write stays synchronous, the caller still learns the outcome in response,
+  and reconciliation stops being inference from a matched address. It also
+  closes the time-of-check/time-of-use race the pre-check cannot. Rejected here
+  only because it requires changing the supplied API, which is out of scope.
+- **Durable intent record with a worker resolving it.** Not rejected outright,
+  but scoped far more narrowly than "an outbox". It buys nothing for the
+  ordinary path — the write is already resolved inside the request — and would
+  earn its place only for `WRITE_UNCONFIRMED`, where the reconciliation read
+  itself failed and the ambiguity outlives the request. See "Why the response
+  stays synchronous" below.
+
+## Why the response stays synchronous
+
+Deferring the write behind a queue and answering `202` was considered and
+rejected. The objection is not latency, it is that the caller stops learning
+the outcome of their own request: account creation would complete somewhere
+the user is not looking, and they cannot proceed until it does. Whether the
+caller waits is a product decision rather than an architectural one — inventory
+systems with genuine contention routinely answer "confirming" and settle later
+— but for this interaction the synchronous answer is the right one, and the
+current design already gives it. Reconciliation is one additional read on the
+same request, not a state machine.
+
+Failing fast instead was also rejected, and for a sharper reason: against this
+upstream an immediate failure is usually a lie. Roughly 70% of committed rows
+are reported to us as 502s, so "creation failed" would be returned for a user
+that exists. The caller then submits again, and with no unique constraint
+upstream that produces the duplicate. The confusion that fail-fast is meant to
+avoid — not knowing whether the record was created — is precisely what
+fail-fast produces here, and in the more damaging direction, because the caller
+acts on the false failure.
+
+What the two arguments share is a premise that does not hold: that upstream's
+answer can be believed. It cannot, which is why the outcome is established by
+reading rather than by trusting the status code.
 
 ## Consequences
 
