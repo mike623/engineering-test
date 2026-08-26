@@ -1,3 +1,136 @@
+# Eurocamp engineering test — submission
+
+Three independent applications:
+
+| Directory | What it is | Port |
+| --- | --- | --- |
+| `apps/engineering` | The supplied API. **Left exactly as delivered**, including the failures it injects on purpose. | 3001 |
+| `apps/bff` | Nest BFF. Owns retries, timeouts, the circuit breaker, response validation and the cache. | 3002 |
+| `apps/web` | Next frontend. Server-rendered lists, error boundaries, a retry that genuinely retries. | 3000 |
+
+The reasoning — database review, API findings, design decisions, what I would
+change with more time — is in [NOTES.md](./NOTES.md). Diagrams are in
+[docs/architecture.md](./docs/architecture.md), and the two decisions worth
+arguing about have their own records in [docs/adr](./docs/adr).
+
+## Prerequisites
+
+- Docker — for the supplied API, its database, and Redis
+- Node 22 (`.nvmrc` pins it; `nvm use` picks it up) and npm 9+
+- git
+
+## Running everything
+
+Four steps, from a clean clone. Each block can be left running in its own
+terminal.
+
+**1. The supplied API and its database** — exactly the steps in the original
+instructions below:
+
+```bash
+docker compose up -d --build --force-recreate
+docker compose exec eurocamp-api npm run seed:run
+```
+
+The API is then on http://localhost:3001, with its docs at
+http://localhost:3001/api.
+
+**2. Redis**, from the compose file belonging to the new applications. The
+supplied `docker-compose.yml` is untouched:
+
+```bash
+docker compose -f docker-compose.apps.yml up -d
+```
+
+Skipping this is survivable: with no `REDIS_URL` set the BFF falls back to an
+in-memory store. It loses the safety net across restarts, which is exactly
+when it matters, so prefer running it.
+
+**3. The BFF:**
+
+```bash
+cd apps/bff
+npm install
+REDIS_URL=redis://localhost:6379 npm run dev
+```
+
+**4. The web application:**
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+Then open http://localhost:3000.
+
+### Why three separate installs
+
+The supplied workspace pins TypeScript 4.8, Nx 15, Nest 9 and Jest 28, and
+declares `engines: node >=18`. The BFF needs Node 22 (`opossum` requires it)
+and the frontend needs React 19 and Next 16, whose types need TypeScript 5.
+Upgrading the supplied workspace to accommodate them would mean editing the
+thing under test — so the two new applications carry their own manifests and
+lockfiles instead, and the supplied one is left as delivered. NOTES.md has the
+full version table.
+
+## Tests
+
+```bash
+npm --prefix apps/bff test    # resilience, validation, cache, write reconciliation
+npm --prefix apps/web test    # error state, retry control, stale and partial rendering
+```
+
+Both suites intercept HTTP rather than mocking modules, so what is asserted is
+what would actually leave the process.
+
+## Configuration
+
+The BFF reads these; every one has a working default.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `UPSTREAM_BASE_URL` | `http://localhost:3001/api/1` | The supplied API |
+| `UPSTREAM_TIMEOUT_MS` | `2000` | Timeout per attempt, not per retry cycle |
+| `UPSTREAM_RETRIES` | `2` | Retries after the first attempt, so three attempts |
+| `UPSTREAM_RETRY_DELAY_MS` | `300` | Base for jittered exponential backoff |
+| `BREAKER_VOLUME_THRESHOLD` | `5` | Failed retry *cycles* before the breaker may open |
+| `BREAKER_ERROR_THRESHOLD_PERCENTAGE` | `50` | Failure rate at which it opens |
+| `BREAKER_RESET_TIMEOUT_MS` | `10000` | How long it stays open before probing |
+| `BREAKER_PROBE_INTERVAL_MS` | `5000` | Shortest gap between user-forced probes |
+| `REDIS_URL` | unset (memory) | Cache store |
+| `PORT` | `3002` | BFF port |
+
+The web application reads `BFF_URL`, defaulting to `http://localhost:3002`.
+
+## Seeing the interesting parts
+
+The whole point of the exercise is what happens when the API misbehaves, and
+none of that is visible while everything works. Three things worth doing:
+
+**Watch a page survive an outage.** Load http://localhost:3000, then
+`docker compose stop eurocamp-api` and reload. The page still renders, with a
+banner saying how old the data is. `curl -i localhost:3002/parcs` shows
+`X-Cache: stale` and an `Age` header.
+
+**Watch the breaker open and close.** With the API still stopped, reload a few
+times, then `curl localhost:3002/health/breakers` — the route is `open`.
+Start the API again and reload: still stale, because the breaker has not timed
+out yet. Press **Try again** on an error page, or
+`curl 'localhost:3002/parcs?retry=true'`, and it probes upstream, closes the
+breaker and serves fresh data. Repeat presses inside the probe window send
+nothing.
+
+**Watch a write survive an API that lies.** `POST /api/1/users` upstream
+commits the row and *then* reports failure, roughly seven times in ten. Create
+a few users from the form on http://localhost:3000/users and compare the list
+against the BFF log: `Recovered a write upstream reported as failed` appears
+for each one the API disowned, and no user is ever created twice.
+
+---
+
+<!-- Everything below is the original instructions, unchanged. -->
+
 # Quick test
 
 ## Introduction
