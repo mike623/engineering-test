@@ -1,5 +1,10 @@
 # The two applications written for this exercise. The supplied compose file is
-# left as delivered; this one adds only what the BFF needs.
+# left as delivered; this one adds only what it does not provide.
+#
+# Merge both files so everything shares one network and the services can reach
+# each other by name:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.apps.yml up --build
 services:
   bff-redis:
     image: redis:7-alpine
@@ -13,3 +18,47 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  bff:
+    build:
+      context: ./apps/bff
+    restart: unless-stopped
+    environment:
+      # Inside the network this is the container's own port, not the 3001 the
+      # supplied compose file publishes to the host.
+      - UPSTREAM_BASE_URL=http://eurocamp-api:8080/api/1
+      - REDIS_URL=redis://bff-redis:6379
+    ports:
+      - 3002:3002
+    depends_on:
+      bff-redis:
+        condition: service_healthy
+      eurocamp-api:
+        condition: service_started
+    healthcheck:
+      # node:22-slim carries no curl, and Node has fetch built in.
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3002/health/breakers').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: ./apps/web
+    restart: unless-stopped
+    environment:
+      # A service name resolves here only because every fetch to the BFF happens
+      # server-side. A client component fetching it directly would need the
+      # host address instead, and the two would have to diverge.
+      - BFF_URL=http://bff:3002
+    ports:
+      - 3000:3000
+    depends_on:
+      bff:
+        condition: service_healthy

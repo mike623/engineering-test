@@ -21,8 +21,36 @@ arguing about have their own records in [docs/adr](./docs/adr).
 
 ## Running everything
 
-Four steps, from a clean clone. Each block can be left running in its own
-terminal.
+Two ways. Containers are fewer commands; running the applications on the host
+is faster to iterate on and is what the development scripts are for.
+
+### Everything in containers
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.apps.yml up --build -d
+docker compose -f docker-compose.yml -f docker-compose.apps.yml exec eurocamp-api npm run seed:run
+```
+
+Merging both files puts all five services on one network, so they reach each
+other by name. The supplied `docker-compose.yml` is unchanged; the second file
+adds Redis, the BFF and the web application. Then open http://localhost:3000.
+
+> **On Apple Silicon, the supplied API image does not build.** `npm ci` reaches
+> `@parcel/watcher@2.0.4`, which has no arm64 prebuild, and the slim base image
+> has no compiler for the fallback build (finding 8 in NOTES.md). Build that one
+> image under emulation instead:
+>
+> ```bash
+> DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose -f docker-compose.yml build eurocamp-api
+> ```
+>
+> then run the `up` command above. The two new applications build natively
+> either way.
+
+### Applications on the host
+
+Useful while working on them, and the path that needs no workaround. Steps 1
+and 2 are still containers.
 
 **1. The supplied API and its database** — exactly the steps in the original
 instructions below:
@@ -35,11 +63,10 @@ docker compose exec eurocamp-api npm run seed:run
 The API is then on http://localhost:3001, with its docs at
 http://localhost:3001/api.
 
-**2. Redis**, from the compose file belonging to the new applications. The
-supplied `docker-compose.yml` is untouched:
+**2. Redis**, from the compose file belonging to the new applications:
 
 ```bash
-docker compose -f docker-compose.apps.yml up -d
+docker compose -f docker-compose.apps.yml up -d bff-redis
 ```
 
 Skipping this is survivable: with no `REDIS_URL` set the BFF falls back to an
@@ -63,6 +90,12 @@ npm run dev
 ```
 
 Then open http://localhost:3000.
+
+### Ports
+
+`3000` web, `3001` supplied API, `3002` BFF, `5433` Postgres, `6379` Redis. The
+supplied compose file publishes 5433 and 3001; if either is already taken on
+your machine, that bind fails before anything else runs.
 
 ### Why three separate installs
 

@@ -35,7 +35,10 @@ const store = (): Keyv[] => {
     disableOfflineQueue: true,
   });
 
-  const keyv = new Keyv({ store: new KeyvRedis(client), namespace: 'bff' });
+  // Keyv and KeyvRedis each prefix the key with their own namespace, so
+  // setting it in both places stores `bff::bff:users:<id>`. Leaving Keyv's
+  // undefined keeps the stored keys as written: `users:<id>`, `parcs:list`.
+  const keyv = new Keyv({ store: new KeyvRedis(client), namespace: undefined });
 
   // Keyv emits on connection trouble; unhandled, it would take the process
   // down for something the safety net is designed to tolerate.

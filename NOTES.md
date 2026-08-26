@@ -146,6 +146,26 @@ reasoning about which failures a client should retry.
 
 `ParcService.newUser()` creates a parc.
 
+### 8. The supplied image does not build on Apple Silicon
+
+`apps/engineering/Dockerfile.dev` runs `npm ci` on `node:20-bookworm-slim`,
+which reaches `@parcel/watcher@2.0.4` — a version predating that package's
+split into per-platform prebuilt binaries. There is no arm64 prebuild in the
+tarball, so `node-gyp-build` falls back to compiling from source, and the slim
+image carries no Python, make or g++:
+
+```
+npm error path /usr/src/app/node_modules/@parcel/watcher
+npm error gyp ERR! find Python
+```
+
+Step 1 of the original instructions therefore fails outright on any M-series
+Mac, before a candidate reaches the exercise at all. It presumably builds on
+the x64 machines it was written on. Two workarounds, both confirmed to work
+here: build the image for `linux/amd64` under emulation, or add the three
+build tools to the image. The supplied file is left as delivered either way —
+the README records the workaround rather than patching around it.
+
 ## Database review (Task 1)
 
 The schema delegates all integrity to an application layer that does not check
