@@ -1,5 +1,6 @@
 import { IncompleteNotice, StaleNotice } from '@/components/data-notices';
 import { PageHeader, RowCount } from '@/components/page-header';
+import { RefreshButton } from '@/components/refresh-button';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getParcs } from '@/lib/bff';
@@ -13,7 +14,7 @@ export default async function ParcsPage() {
 
   return (
     <main className="mx-auto max-w-4xl">
-      <PageHeader title="Parcs">
+      <PageHeader action={<RefreshButton resource="/parcs" page="/" />} title="Parcs">
         <RowCount shown={items.length} noun="parc" />
       </PageHeader>
       <StaleNotice stale={stale} ageSeconds={ageSeconds} />

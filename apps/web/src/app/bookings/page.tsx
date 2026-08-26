@@ -1,5 +1,6 @@
 import { IncompleteNotice, StaleNotice } from '@/components/data-notices';
 import { PageHeader, RowCount } from '@/components/page-header';
+import { RefreshButton } from '@/components/refresh-button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -29,7 +30,7 @@ export default async function BookingsPage() {
 
   return (
     <main className="mx-auto max-w-4xl">
-      <PageHeader title="Bookings">
+      <PageHeader action={<RefreshButton resource="/bookings" page="/bookings" />} title="Bookings">
         <RowCount shown={items.length} noun="booking" />
       </PageHeader>
       <StaleNotice stale={stale} ageSeconds={ageSeconds} />
